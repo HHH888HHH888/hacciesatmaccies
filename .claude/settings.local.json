@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm -v)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(kill 59807)",
+      "Bash(lsof -ti:5173)",
+      "Bash(xargs kill -9)",
+      "Bash(echo \"port 5173 free: $\\(lsof -ti:5173 || echo yes\\)\")",
+      "Bash(curl -s --max-time 40 \"https://services.slip.wa.gov.au/public/rest/services/SLIP_Public_Services/Industry_and_Mining/MapServer/3?f=json\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('name:',d.get\\('name'\\)\\); print\\('geometryType:',d.get\\('geometryType'\\)\\); print\\('maxRecordCount:',d.get\\('maxRecordCount'\\)\\); print\\('FIELDS:'\\); [print\\(' -',f['name'],f['type']\\) for f in d.get\\('fields',[]\\)]\")",
+      "Bash(curl -s --max-time 50 \"https://services.slip.wa.gov.au/public/rest/services/SLIP_Public_Services/Industry_and_Mining/MapServer/3/query?where=tenstatus%3D'LIVE'&outFields=fmt_tenid,type,tenstatus,holder1,holdercnt,legal_area,unit_of_me,grantdate,enddate&outSR=4326&resultRecordCount=3&returnGeometry=true&f=geojson\")",
+      "Bash(python3 -c ' *)",
+      "Bash(curl -s --max-time 10 http://localhost:8787/api/data)",
+      "Bash(curl -s --max-time 20 \"https://services.slip.wa.gov.au/public/rest/services/SLIP_Public_Services/Industry_and_Mining/MapServer/3/query?where=tenstatus%3D'LIVE'%20AND%20type%20NOT%20LIKE%20'%25COAL%25'&geometry=120.5,-31.4,122.3,-30.0&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=fmt_tenid,type,legal_area,unit_of_me&outSR=4326&resultRecordCount=10&returnGeometry=false&f=json\")",
+      "Bash(perl -0pi -e 's/STATS\\\\./stats./g; s/Source coverage · \\\\{SOURCES\\\\.length\\\\}/Source coverage · {sources.length}/; s/\\\\{SOURCES\\\\.map\\\\\\(/{sources.map\\(/' pages/DataHealth.tsx)",
+      "Bash(perl -0pi -e 's/, NOW\\\\\\)/\\)/g' pages/Watchlist.tsx)",
+      "Bash(perl -0pi -e 's/GEO\\\\[/geo[/g; s/DEPOSITS\\\\.map/deposits.map/g; s/hashDots\\\\\\(t\\\\\\)/hashDots\\(t, geo[t.id]\\)/g; s/daysUntil\\\\\\(t\\\\.expiryDate, NOW\\\\\\)/daysUntil\\(t.expiryDate\\)/g' components/WAMap.tsx)",
+      "Bash(lsof -ti:8787)",
+      "Bash(echo \"5173 free: $\\(lsof -ti:5173 || echo yes\\) | 8787 free: $\\(lsof -ti:8787 || echo yes\\)\")",
+      "Bash(curl -s --max-time 10 http://localhost:8787/api/health)",
+      "Bash(python3 -m json.tool)",
+      "Bash(timeout 18 npx tsx server/index.ts)",
+      "Bash(curl -s --max-time 8 http://localhost:8787/api/health)"
+    ]
+  }
+}

@@ -1,0 +1,31 @@
+# Render blueprint — deploys Haxax as one always-on Node web service.
+# Create the service at https://render.com → New → Blueprint, point it at this repo.
+# Render will prompt for the "sync: false" secrets (passwords + MiniMax key) and
+# auto-generate the session secret. Do NOT set HAXAX_API_PORT — Render injects PORT.
+services:
+  - type: web
+    name: haxax
+    runtime: node
+    plan: starter          # keeps it warm so the 30-min live refresh runs; "free" works but cold-starts
+    region: singapore      # closest Render region to WA / the DMIRS data source
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production            # makes session cookies Secure (HTTPS-only)
+      - key: HAXAX_SESSION_SECRET
+        generateValue: true          # Render generates a stable secret (sessions survive restarts)
+      - key: HAXAX_GATE_PASSWORD
+        sync: false                  # set in the dashboard (site access key)
+      - key: HAXAX_ADMIN_PASSWORD
+        sync: false                  # set in the dashboard (Admin sign-in)
+      - key: HAXAX_GUEST_PASSWORD
+        sync: false                  # set in the dashboard (Guest sign-in)
+      - key: MINIMAX_API_KEY
+        sync: false                  # set in the dashboard (AI notes/memos)
+      - key: MINIMAX_MODEL
+        value: MiniMax-M2
+      - key: MINIMAX_URL
+        value: https://api.minimax.io/v1/text/chatcompletion_v2

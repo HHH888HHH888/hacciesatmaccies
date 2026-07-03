@@ -1,0 +1,199 @@
+/* ============================================================
+   HAXAX — Design Tokens
+   Premium mining-finance / geospatial intelligence aesthetic.
+   Dark charcoal first, restrained palette, teal accent.
+   ============================================================ */
+
+:root {
+  /* ---- Surfaces (warm ink charcoal, dark default) ---- */
+  --bg-app: #0d0d0b;        /* deepest app background */
+  --bg-inset: #090907;      /* map / inset wells */
+  --bg-surface: #141410;    /* sidebars, nav, panels */
+  --bg-elevated: #1a1a14;   /* cards */
+  --bg-raised: #20201a;     /* popovers, menus, tooltips */
+  --bg-hover: #1f1e17;
+  --bg-active: #27261c;
+  --bg-selected: rgba(74, 157, 110, 0.12);
+
+  /* ---- Borders ---- */
+  --border: #28271e;
+  --border-strong: #38362a;
+  --border-faint: #1d1c15;
+
+  /* ---- Text (warm ivory ink) ---- */
+  --text-primary: #ece7da;
+  --text-secondary: #a8a08c;
+  --text-muted: #6f6857;
+  --text-faint: #4d4839;
+
+  /* ---- Accent (deep forest green) ---- */
+  --accent: #4a9d6e;
+  --accent-strong: #5fb784;
+  --accent-text: #06140d;
+  --accent-soft: rgba(74, 157, 110, 0.14);
+  --accent-softer: rgba(74, 157, 110, 0.07);
+  --accent-line: rgba(74, 157, 110, 0.4);
+
+  /* ---- Secondary accent (amber) ---- */
+  --amber: #c79a3e;
+  --amber-soft: rgba(199, 154, 62, 0.13);
+
+  /* ---- Score / status semantics (warm) ---- */
+  --score-high: #5cae73;        /* 85-100 */
+  --score-high-soft: rgba(92, 174, 115, 0.15);
+  --score-mid: #c79a3e;         /* 60-84 */
+  --score-mid-soft: rgba(199, 154, 62, 0.15);
+  --score-low: #c25a4e;         /* <60 */
+  --score-low-soft: rgba(194, 90, 78, 0.15);
+
+  --pos: #5cae73;
+  --neg: #c25a4e;
+  --info: #6f99c4;
+  --info-soft: rgba(111, 153, 196, 0.15);
+
+  /* severity */
+  --sev-critical: #c25a4e;
+  --sev-high: #c47a3e;
+  --sev-medium: #c79a3e;
+  --sev-low: #6f99c4;
+
+  /* ---- Commodity hues (muted, technical) ---- */
+  --c-gold: #d8b24a;
+  --c-lithium: #5fb0c9;
+  --c-iron: #c06a4d;
+  --c-nickel: #7f9c6e;
+  --c-ree: #b07cc9;
+  --c-copper: #d08a5a;
+  --c-cobalt: #5f7fc9;
+
+  /* ---- Typography — formal serif (Times New Roman) throughout ---- */
+  --font-sans: "Times New Roman", "Tinos", Times, "Liberation Serif", Georgia, serif;
+  --font-mono: "Times New Roman", "Tinos", Times, Georgia, serif;
+
+  /* sizes nudged up for a calmer, more legible read */
+  --fs-9: 10px;
+  --fs-10: 11px;
+  --fs-11: 12px;
+  --fs-12: 13px;
+  --fs-13: 14px;
+  --fs-14: 15px;
+  --fs-16: 17px;
+  --fs-18: 20px;
+  --fs-22: 25px;
+  --fs-28: 32px;
+  --fs-36: 44px;
+
+  --lh-tight: 1.2;
+  --lh-snug: 1.45;
+  --lh-normal: 1.65;
+
+  --tracking-wide: 0.06em;
+  --tracking-wider: 0.12em;
+
+  /* ---- Spacing (relaxed) ---- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 13px;
+  --sp-4: 20px;
+  --sp-5: 26px;
+  --sp-6: 34px;
+  --sp-8: 46px;
+  --sp-10: 60px;
+  --sp-12: 76px;
+
+  /* ---- Radius (calm / soft — generous but not cartoon) ---- */
+  --r-xs: 5px;
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 16px;
+  --r-xl: 22px;
+  --r-pill: 999px;
+
+  /* ---- Elevation (soft, diffuse) ---- */
+  --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.28);
+  --shadow-2: 0 8px 28px rgba(0, 0, 0, 0.32);
+  --shadow-3: 0 24px 64px rgba(0, 0, 0, 0.42);
+  --shadow-panel: -28px 0 70px rgba(0, 0, 0, 0.34);
+  --ring: 0 0 0 2px var(--bg-app), 0 0 0 4px var(--accent);
+
+  /* ---- Motion (smooth, calm) ---- */
+  --t-fast: 140ms;
+  --t-med: 240ms;
+  --t-slow: 460ms;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ---- Layout metrics (roomier) ---- */
+  --nav-h: 62px;
+  --sidebar-w: 300px;
+  --panel-w: 460px;
+  --ticker-h: 40px;
+
+  color-scheme: dark;
+}
+
+/* ============================================================
+   LIGHT THEME
+   ============================================================ */
+[data-theme="light"] {
+  /* warm ivory / parchment "document" theme */
+  --bg-app: #efe9da;
+  --bg-inset: #e6dfcd;
+  --bg-surface: #f6f1e6;
+  --bg-elevated: #fbf8f0;
+  --bg-raised: #fdfaf3;
+  --bg-hover: #eee7d6;
+  --bg-active: #e4dcc8;
+  --bg-selected: rgba(43, 114, 74, 0.12);
+
+  --border: #ddd4c0;
+  --border-strong: #c8bda4;
+  --border-faint: #e7dfcd;
+
+  --text-primary: #211d14;
+  --text-secondary: #5a5240;
+  --text-muted: #837a64;
+  --text-faint: #a89e86;
+
+  --accent: #2b724a;
+  --accent-strong: #35895a;
+  --accent-text: #ffffff;
+  --accent-soft: rgba(43, 114, 74, 0.12);
+  --accent-softer: rgba(43, 114, 74, 0.06);
+  --accent-line: rgba(43, 114, 74, 0.4);
+
+  --amber: #9a6e16;
+  --amber-soft: rgba(154, 110, 22, 0.13);
+
+  --score-high: #2b724a;
+  --score-high-soft: rgba(43, 114, 74, 0.13);
+  --score-mid: #9a6e16;
+  --score-mid-soft: rgba(154, 110, 22, 0.13);
+  --score-low: #a83a2c;
+  --score-low-soft: rgba(168, 58, 44, 0.13);
+
+  --pos: #2b724a;
+  --neg: #a83a2c;
+  --info: #2f5e93;
+  --info-soft: rgba(47, 94, 147, 0.12);
+
+  --sev-critical: #a83a2c;
+  --sev-high: #b3551a;
+  --sev-medium: #9a6e16;
+  --sev-low: #2f5e93;
+
+  --c-gold: #a8841f;
+  --c-lithium: #2b7d96;
+  --c-iron: #a8492c;
+  --c-nickel: #4d7340;
+  --c-ree: #80479c;
+  --c-copper: #a85f2c;
+  --c-cobalt: #3a5aa8;
+
+  --shadow-1: 0 1px 2px rgba(20, 30, 45, 0.08);
+  --shadow-2: 0 4px 14px rgba(20, 30, 45, 0.10);
+  --shadow-3: 0 12px 40px rgba(20, 30, 45, 0.16);
+  --shadow-panel: -18px 0 48px rgba(20, 30, 45, 0.10);
+
+  color-scheme: light;
+}

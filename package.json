@@ -1,0 +1,33 @@
+{
+  "name": "haxax",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Haxax — AI mining tenement intelligence platform for Western Australia",
+  "scripts": {
+    "dev": "concurrently -n web,api -c cyan,magenta \"npm:dev:web\" \"npm:dev:api\"",
+    "dev:web": "vite",
+    "dev:api": "tsx watch server/index.ts",
+    "server": "tsx server/index.ts",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "NODE_ENV=production tsx server/index.ts"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^4.3.2",
+    "lucide-react": "^0.453.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2",
+    "tsx": "^4.19.1",
+    "vite": "^5.4.9",
+    "zustand": "^4.5.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
+    "concurrently": "^9.1.0",
+    "typescript": "^5.6.3"
+  }
+}
