@@ -6,7 +6,7 @@ services:
   - type: web
     name: haxax
     runtime: node
-    plan: starter          # keeps it warm so the 30-min live refresh runs; "free" works but cold-starts
+    plan: free             # $0; sleeps after ~15 min idle (30-60s cold start). Change to "starter" (~$7/mo) to stay always-on.
     region: singapore      # closest Render region to WA / the DMIRS data source
     buildCommand: npm install && npm run build
     startCommand: npm start
