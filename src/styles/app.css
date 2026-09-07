@@ -1779,6 +1779,45 @@ table.data-table { width: 100%; border-collapse: collapse; font-size: var(--fs-1
 @keyframes splashbar { 0% { transform: translateX(-110%); } 100% { transform: translateX(320%); } }
 .splash-src { font-family: var(--font-mono); font-size: var(--fs-10); color: var(--text-faint); letter-spacing: 0.06em; margin-top: var(--sp-2); }
 
+/* ---- legal / privacy page ---- */
+.legal-page {
+  min-height: 100vh; min-height: 100dvh;
+  background: var(--bg-app); color: var(--text-primary);
+  overflow-y: auto;
+}
+.legal-inner {
+  max-width: 760px; margin: 0 auto;
+  padding: var(--sp-6) var(--sp-5) calc(var(--sp-8) + 20px);
+}
+.legal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-bottom: var(--sp-4); margin-bottom: var(--sp-5);
+  border-bottom: 1px solid var(--border);
+}
+.legal-word { font-size: var(--fs-18); font-weight: 700; letter-spacing: 0.22em; text-indent: 0.22em; }
+.legal-title { font-size: var(--fs-32); font-weight: 700; letter-spacing: -0.01em; margin: 0 0 4px; }
+.legal-meta { font-family: var(--font-mono); font-size: var(--fs-11); color: var(--text-muted); margin: 0 0 var(--sp-5); text-transform: uppercase; letter-spacing: 0.08em; }
+.legal-lead { font-size: var(--fs-15); line-height: 1.7; color: var(--text-secondary); margin: 0 0 var(--sp-5); }
+.legal-section { margin-bottom: var(--sp-5); }
+.legal-h2 {
+  display: flex; align-items: baseline; gap: 10px;
+  font-size: var(--fs-16); font-weight: 600; margin: 0 0 var(--sp-2);
+  color: var(--text-primary);
+}
+.legal-num { font-family: var(--font-mono); font-size: var(--fs-12); color: var(--accent); font-weight: 700; }
+.legal-section p { font-size: var(--fs-14); line-height: 1.72; color: var(--text-secondary); margin: 0 0 var(--sp-2); }
+.legal-section ul { margin: 0 0 var(--sp-2); padding-left: var(--sp-4); display: flex; flex-direction: column; gap: 8px; }
+.legal-section li { font-size: var(--fs-14); line-height: 1.6; color: var(--text-secondary); }
+.legal-section strong { color: var(--text-primary); font-weight: 600; }
+.legal-page a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-line); }
+.legal-page a:hover { border-bottom-color: var(--accent); }
+.legal-foot {
+  margin-top: var(--sp-6); padding-top: var(--sp-4); border-top: 1px solid var(--border);
+  font-size: var(--fs-11); color: var(--text-muted); line-height: 1.6;
+}
+.auth-foot-link { color: var(--text-secondary); text-decoration: none; }
+.auth-foot-link:hover { color: var(--accent); }
+
 /* ---- access lock (gate + account sign-in) ---- */
 .auth-screen {
   height: 100vh; height: 100dvh;

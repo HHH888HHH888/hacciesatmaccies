@@ -17,6 +17,7 @@ import { Alerts } from "./pages/Alerts";
 import { Comparables } from "./pages/Comparables";
 import { MemoGenerator } from "./pages/MemoGenerator";
 import { DataHealth } from "./pages/DataHealth";
+import { Privacy } from "./pages/Privacy";
 
 export default function App() {
   const theme = useStore((s) => s.theme);
@@ -51,6 +52,9 @@ export default function App() {
     const id = window.setInterval(() => bumpSync(), 30000);
     return () => window.clearInterval(id);
   }, [bumpSync]);
+
+  // privacy policy is public — viewable with or without a session
+  if (location.pathname === "/privacy") return <Privacy />;
 
   // access lock: gate password, then account selection
   if (!auth.ready) return <DataSplash label="Securing session…" />;
