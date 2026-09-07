@@ -27,6 +27,11 @@ export function LiveTicker() {
 
   return (
     <div className="ticker" aria-label="Live activity feed">
+      <div className="ticker-legal">
+        <a href="#/privacy">Privacy</a>
+        <span className="tl-dot">·</span>
+        <a href="#/terms">Terms</a>
+      </div>
       <div className="ticker-label">
         <span className="live-pip" /> Live
       </div>
@@ -47,11 +52,6 @@ export function LiveTicker() {
             </span>
           ))}
         </div>
-      </div>
-      <div className="ticker-legal">
-        <a href="#/privacy">Privacy</a>
-        <span className="tl-dot">·</span>
-        <a href="#/terms">Terms</a>
       </div>
     </div>
   );

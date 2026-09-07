@@ -1879,15 +1879,15 @@ table.data-table { width: 100%; border-collapse: collapse; font-size: var(--fs-1
 .auth-foot-link { color: var(--text-secondary); text-decoration: none; }
 .auth-foot-link:hover { color: var(--accent); }
 
-/* legal links pinned to the right of the live ticker (acts as the app footer) */
+/* subtle legal links pinned to the bottom-left of every page (left end of the ticker) */
 .ticker-legal {
-  flex-shrink: 0; display: flex; align-items: center; gap: 6px;
+  flex-shrink: 0; order: -1; display: flex; align-items: center; gap: 5px;
   padding: 0 var(--sp-3); height: 100%;
-  border-left: 1px solid var(--border);
-  font-size: var(--fs-10); letter-spacing: 0.04em;
+  border-right: 1px solid var(--border);
+  font-size: var(--fs-9); letter-spacing: 0.02em;
 }
-.ticker-legal a { color: var(--text-muted); text-decoration: none; text-transform: uppercase; }
-.ticker-legal a:hover { color: var(--accent); }
+.ticker-legal a { color: var(--text-faint); text-decoration: none; }
+.ticker-legal a:hover { color: var(--accent); text-decoration: underline; }
 .ticker-legal .tl-dot { color: var(--text-faint); }
 @media (max-width: 720px) { .ticker-legal { display: none; } }
 
