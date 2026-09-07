@@ -1818,6 +1818,18 @@ table.data-table { width: 100%; border-collapse: collapse; font-size: var(--fs-1
 .auth-foot-link { color: var(--text-secondary); text-decoration: none; }
 .auth-foot-link:hover { color: var(--accent); }
 
+/* legal links pinned to the right of the live ticker (acts as the app footer) */
+.ticker-legal {
+  flex-shrink: 0; display: flex; align-items: center; gap: 6px;
+  padding: 0 var(--sp-3); height: 100%;
+  border-left: 1px solid var(--border);
+  font-size: var(--fs-10); letter-spacing: 0.04em;
+}
+.ticker-legal a { color: var(--text-muted); text-decoration: none; text-transform: uppercase; }
+.ticker-legal a:hover { color: var(--accent); }
+.ticker-legal .tl-dot { color: var(--text-faint); }
+@media (max-width: 720px) { .ticker-legal { display: none; } }
+
 /* ---- access lock (gate + account sign-in) ---- */
 .auth-screen {
   height: 100vh; height: 100dvh;

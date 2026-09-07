@@ -55,7 +55,7 @@ function GateStage() {
         <button className="auth-btn" type="submit" disabled={busy || !pw}>
           {busy ? "Checking…" : <>Unlock <ArrowRight size={15} /></>}
         </button>
-        <div className="auth-foot">haxax.com · single-tenant intelligence terminal · <a href="#/privacy" className="auth-foot-link">Privacy</a></div>
+        <div className="auth-foot">haxax.com · single-tenant intelligence terminal · <a href="#/privacy" className="auth-foot-link">Privacy</a> · <a href="#/terms" className="auth-foot-link">Terms</a></div>
       </form>
     </div>
   );

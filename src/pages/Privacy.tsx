@@ -140,8 +140,8 @@ export function Privacy() {
         </Section>
 
         <footer className="legal-foot">
-          Haxax · Western Australian mining-tenement intelligence · data sourced from public
-          DMIRS / SLIP / GSWA / NNTT / Landgate registers.
+          See also our <a href="#/terms">Terms of Use</a>. Haxax · Western Australian
+          mining-tenement intelligence · data sourced from public DMIRS / SLIP / GSWA / NNTT / Landgate registers.
         </footer>
       </div>
     </div>

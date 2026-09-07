@@ -48,6 +48,11 @@ export function LiveTicker() {
           ))}
         </div>
       </div>
+      <div className="ticker-legal">
+        <a href="#/privacy">Privacy</a>
+        <span className="tl-dot">·</span>
+        <a href="#/terms">Terms</a>
+      </div>
     </div>
   );
 }

@@ -18,6 +18,7 @@ import { Comparables } from "./pages/Comparables";
 import { MemoGenerator } from "./pages/MemoGenerator";
 import { DataHealth } from "./pages/DataHealth";
 import { Privacy } from "./pages/Privacy";
+import { Terms } from "./pages/Terms";
 
 export default function App() {
   const theme = useStore((s) => s.theme);
@@ -53,8 +54,9 @@ export default function App() {
     return () => window.clearInterval(id);
   }, [bumpSync]);
 
-  // privacy policy is public — viewable with or without a session
+  // legal pages are public — viewable with or without a session
   if (location.pathname === "/privacy") return <Privacy />;
+  if (location.pathname === "/terms") return <Terms />;
 
   // access lock: gate password, then account selection
   if (!auth.ready) return <DataSplash label="Securing session…" />;
