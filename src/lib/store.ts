@@ -195,7 +195,7 @@ export const useStore = create<Store>()(
           };
         }),
 
-      theme: "dark",
+      theme: "light",
       toggleTheme: () => set((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),
       setTheme: (t) => set({ theme: t }),
 
@@ -285,7 +285,7 @@ export const useStore = create<Store>()(
       },
     }),
     {
-      name: "haxax",
+      name: "haxax.v2",
       storage: createJSONStorage(() => accountStorage),
       partialize: (s) => ({ theme: s.theme, watchlist: s.watchlist, deals: s.deals }),
     },
