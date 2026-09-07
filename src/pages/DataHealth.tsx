@@ -68,7 +68,7 @@ export function DataHealth() {
           <KpiTile label="Deposits" value={fmtNum(stats.deposits)} sub="mines & prospects" />
           <KpiTile label="Drill holes" value={fmtNum(stats.drillHoles)} sub="historic + recent" />
           <KpiTile label="Historical events" value={fmtNum(stats.events)} sub="timeline records" />
-          <KpiTile label="Comparables" value={fmtNum(stats.comps)} sub="transactions" />
+          <KpiTile label="Ground covered" value={fmtNum(Math.round(stats.totalAreaHa))} sub="hectares (real geometry)" />
           <KpiTile label="Alerts emitted" value={fmtNum(stats.alerts)} sub="rolling 10 days" />
         </div>
 

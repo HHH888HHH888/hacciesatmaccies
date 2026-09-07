@@ -7,7 +7,6 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import type {
   Alert,
   Commodity,
-  CompTxn,
   DealStage,
   FeedEvent,
   LayerKey,
@@ -19,14 +18,13 @@ import type {
   TenementStatus,
 } from "./types";
 import type { Deposit } from "./enrich";
-import { ALERTS, COMPS, FEED, STATS, TENEMENTS } from "./seed";
+import { ALERTS, FEED, STATS, TENEMENTS } from "./seed";
 
 export type DataStatus = "loading" | "live" | "mock" | "error";
 export type Stats = typeof STATS;
 
 export interface DataPayload {
   tenements: Tenement[];
-  comps: CompTxn[];
   alerts: Alert[];
   feed: FeedEvent[];
   stats: Stats;
@@ -82,7 +80,6 @@ const DEFAULT_LAYERS: LayerState = {
 interface Store {
   // data (live WA register or bundled fallback)
   tenements: Tenement[];
-  comps: CompTxn[];
   deposits: Deposit[];
   drillPoints: { lng: number; lat: number }[];
   stats: Stats;
@@ -170,9 +167,8 @@ const accountStorage = {
 export const useStore = create<Store>()(
   persist(
     (set, get) => ({
-      // data — starts on the bundled demo set, swapped for live on bootstrap
+      // data — starts on the bundled fallback set, swapped for live on bootstrap
       tenements: TENEMENTS,
-      comps: COMPS,
       deposits: [],
       drillPoints: [],
       stats: STATS,
@@ -191,7 +187,7 @@ export const useStore = create<Store>()(
           const deals: Record<string, DealStage | null> = {};
           Object.entries(state.deals).forEach(([id, st]) => { if (ids.has(id) && st) deals[id] = st; });
           return {
-            tenements: p.tenements, comps: p.comps, deposits: p.deposits ?? [], drillPoints: p.drillPoints ?? [], alerts: p.alerts, feed: p.feed, stats: p.stats,
+            tenements: p.tenements, deposits: p.deposits ?? [], drillPoints: p.drillPoints ?? [], alerts: p.alerts, feed: p.feed, stats: p.stats,
             watchlist, deals, dataStatus: status,
             dataSource: p.source ?? (status === "live" ? "Live WA register" : "Offline cache"),
             dataGeneratedAt: p.generatedAt ?? null, dataRegions: p.regions ?? 0,
@@ -398,7 +394,7 @@ export async function bootstrapData(): Promise<void> {
     await new Promise((r) => setTimeout(r, 3000));
   }
   useStore.getState().setData(
-    { tenements: TENEMENTS, comps: COMPS, alerts: ALERTS, feed: FEED, stats: STATS, source: "Offline cache — live register unreachable" },
+    { tenements: TENEMENTS, alerts: ALERTS, feed: FEED, stats: STATS, source: "Offline cache — live register unreachable" },
     "mock",
   );
 }

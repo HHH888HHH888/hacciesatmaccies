@@ -101,64 +101,28 @@ export interface AIOpinion {
   nextStep: string;
 }
 
-export interface CompTxn {
-  id: string;
-  project: string;
-  region: RegionId;
-  commodity: Commodity;
-  date: string;
-  areaHa: number;
-  considerationM: number; // A$ millions
-  evPerHa: number; // A$ / ha
-  type: "Acquisition" | "Farm-in" | "JV" | "Royalty sale" | "Tenement sale";
-  note: string;
-}
-
-/** Statutory tenure / register metadata (TENGRAPH / DMIRS style). */
+/** Statutory tenure / register metadata — every field sourced from the live DMIRS register. */
 export interface TenureRegister {
-  mineralField: string;
-  datum: string; // e.g. "GDA2020 / MGA Zone 51"
-  coords: string; // formatted centroid
-  subBlocks: number;
-  rentPerYear: number; // A$
-  minExpenditure: number; // A$/yr commitment
-  expenditureToDate: number; // A$ cumulative
-  combinedReporting: boolean;
-  nativeTitle: string;
-  heritage: string;
-  lga: string; // local government area
-  mapSheet: string; // 1:250k sheet
-  survey: string;
-  applicationDate: string; // ISO
-  lastDealing: { date: string; type: string };
-}
-
-/** Acquisition / flip economics — the buy-or-flip lens. */
-export interface Econ {
-  evPerHa: number; // comparable mean
-  impliedEvLowM: number;
-  impliedEvMidM: number;
-  impliedEvHighM: number;
-  acqCostM: number; // estimated cost to secure
-  maxBidM: number; // recommended ceiling
-  holdingCostPa: number; // rent + min expenditure (A$/yr)
-  upliftPct: number; // flip margin at mid EV vs acq cost
-  acquirers: string[]; // likely strategic buyers
-  flipThesis: string;
-  play: "Flip" | "Hold & develop" | "Consolidate" | "Pass";
+  datum: string; // e.g. "GDA2020 / MGA Zone 51" (standard CRS)
+  coords: string; // formatted centroid (from real geometry)
+  subBlocks: number; // graticular blocks (from real area)
+  surveyStatus: string; // real DMIRS survstatus
 }
 
 export interface Tenement {
   id: string; // e.g. E47/3812
   licenceType: LicenceType;
   status: TenementStatus;
-  holder: string;
-  holderType: "Major" | "Mid-cap" | "Junior" | "Private" | "Individual";
-  grantDate: string; // ISO
-  expiryDate: string; // ISO
-  areaHa: number;
-  blocks: number;
-  commodities: Commodity[];
+  holder: string; // primary holder (holder1)
+  holders: string[]; // all registered holders
+  holderAddress?: string; // registered address of the primary holder
+  holderType: "Major" | "Mid-cap" | "Junior" | "Private" | "Individual"; // inferred from holder name
+  grantDate: string; // ISO — real
+  startDate: string; // ISO — real
+  expiryDate: string; // ISO — real
+  areaHa: number; // from real polygon geometry
+  blocks: number; // graticular blocks (derived from area)
+  commodities: Commodity[]; // inferred from nearest MINEDEX deposit
   regionId: RegionId;
   district: string;
   /** centroid */
@@ -166,27 +130,39 @@ export interface Tenement {
   lat: number;
   /** polygon vertices in lng/lat (closed implicitly) */
   poly: [number, number][];
-  nearbyMines: { name: string; commodity: Commodity; distanceKm: number; status: string }[];
-  geologySummary: string;
-  historicalActivity: string;
-  drillHoles: number;
-  riskFlags: { label: string; level: RiskLevel }[];
-  strategicNotes: string;
-  comps: string[]; // ids referencing CompTxn
-  score: number;
+  nearbyMines: { name: string; commodity: Commodity; distanceKm: number; status: string }[]; // real MINEDEX
+  endowment: number; // real recorded deposits within ~25 km
+  drillHolesNearby: number; // real drill collars within ~10 km (0 if not yet computed)
+  surveyStatus: string; // real DMIRS survey status
+  specialInterest?: string; // real DMIRS special-interest flag
+  riskFlags: { label: string; level: RiskLevel }[]; // derived only from real dates / holder count
+  score: number; // transparent indicator computed from real inputs only (no randomness)
   factors: ScoreFactor[];
-  ai: AIOpinion;
+  ai: AIOpinion; // narrative grounded only in the real facts above
   action: SuggestedAction;
-  timeline: TimelineEvent[];
-  ownershipComplexity: "Clean" | "Single JV" | "Multiple parties" | "Disputed";
-  encumbrances: string[];
+  timeline: TimelineEvent[]; // real register dates only
+  ownershipComplexity: "Clean" | "Single JV" | "Multiple parties"; // from real holder count
   register: TenureRegister;
-  econ: Econ;
+  context?: RealContext; // resolved on-demand from live geology/native-title/etc. layers
   target?: TargetSignal;
   opportunity?: OpportunitySignal;
   scorePercentile: number; // 0-100 percentile within its region
   lastUpdated: string; // ISO
   dealStage: DealStage | null;
+}
+
+/** Real statutory / geological context, resolved on-demand from live DMIRS/SLIP layers.
+   Every field here is sourced directly from a government spatial service — nothing modelled. */
+export interface RealContext {
+  geology: { unit: string; code: string; description: string } | null; // GSWA interpreted bedrock geology
+  mineralField: { field: string; district: string; number: string } | null; // DMIRS Mineral Field Boundaries
+  lga: string | null; // Local Government Authority (Landgate)
+  nativeTitle: { name: string; status: string; type: string; reference: string } | null; // NNTT / Fed Court
+  mapSheet: string | null; // 1:250 000 geological map sheet
+  wamexReports: number | null; // real WAMEX exploration reports within ~10 km
+  drillHolesNearby: number | null; // real drill collars within ~10 km
+  source: string; // attribution
+  fetchedAt: string; // ISO
 }
 
 /** AI analog-prospectivity signal — likelihood of an undiscovered analogous deposit. */

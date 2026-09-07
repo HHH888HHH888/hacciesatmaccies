@@ -36,9 +36,11 @@ export function AIOpinionCard({ t, opinion, provider }: { t: Tenement; opinion?:
               </span>
             </div>
             <div style={{ marginTop: 8 }} className="row center gap-2">
-              <span className="eyebrow">Call</span>
+              <span className="eyebrow">Screen</span>
               <ActionBadge action={t.action} />
-              <span className="pill pill--neutral">{t.econ.play}</span>
+              {t.opportunity && t.opportunity.signals[0] && (
+                <span className="pill pill--neutral">{t.opportunity.signals[0]}</span>
+              )}
             </div>
           </div>
         </div>

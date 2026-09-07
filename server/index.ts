@@ -45,11 +45,20 @@ const MINEDEX =
   "https://services.slip.wa.gov.au/public/rest/services/SLIP_Public_Services/Industry_and_Mining/MapServer/0/query";
 const DRILLHOLES =
   "https://services.slip.wa.gov.au/public/rest/services/SLIP_Public_Services/Industry_and_Mining/MapServer/1/query";
+// real context layers (all public SLIP/DMIRS, no key) — used on-demand per tenement
+const SVC = "https://services.slip.wa.gov.au/public/rest/services/SLIP_Public_Services";
+const L_GEOLOGY = `${SVC}/Geology_and_Soils_Map/MapServer/4/query`;      // 1:500k interpreted bedrock geology
+const L_MINFIELD = `${SVC}/Industry_and_Mining/MapServer/4/query`;       // Mineral Field Boundaries (DMIRS-005)
+const L_LGA = `${SVC}/Boundaries/MapServer/14/query`;                    // Local Government Authority
+const L_NT_DET = `${SVC}/Boundaries/MapServer/24/query`;                 // Native Title (Determination)
+const L_NT_CLAIM = `${SVC}/Boundaries/MapServer/21/query`;               // Native Title (NNTT claim)
+const L_WAMEX = `${SVC}/Industry_and_Mining/MapServer/22/query`;         // WAMEX exploration reports
+const L_MAPSHEET = `${SVC}/Industry_and_Mining/MapServer/40/query`;      // 1:250k geological map sheet index
 const DEPOSITS_PER_REGION = 140;
 const DRILLHOLES_PER_REGION = 160;
 const PER_REGION = 26; // bound volume; ~10 regions → ~240 live tenements
 const REFRESH_MS = 30 * 60 * 1000;
-const OUT_FIELDS = "fmt_tenid,type,tenstatus,survstatus,holder1,holder2,holder3,holdercnt,legal_area,unit_of_me,grantdate,startdate,enddate";
+const OUT_FIELDS = "fmt_tenid,type,tenstatus,survstatus,special_in,holder1,holder2,holder3,holder4,holder5,addr1,holdercnt,legal_area,unit_of_me,grantdate,startdate,enddate";
 
 type Payload = ReturnType<typeof enrichAll>;
 interface Cache {
@@ -120,6 +129,36 @@ function unitHectares(area: number, unit: string | null): number {
   return area; // HA.
 }
 
+/* ---------- real on-demand context lookups (point-in-polygon over public layers) ---------- */
+async function arcgisPointAttrs(url: string, lng: number, lat: number, outFields = "*"): Promise<any | null> {
+  const params = new URLSearchParams({
+    geometry: `${lng},${lat}`, geometryType: "esriGeometryPoint", inSR: "4326",
+    spatialRel: "esriSpatialRelIntersects", outFields, returnGeometry: "false", f: "json",
+  });
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 20000);
+  try {
+    const res = await fetch(`${url}?${params.toString()}`, { signal: ctrl.signal, headers: { "User-Agent": "Haxax/1.0" } });
+    if (!res.ok) return null;
+    const j: any = await res.json();
+    return j.features?.[0]?.attributes ?? null;
+  } catch { return null; } finally { clearTimeout(to); }
+}
+async function arcgisCount(url: string, lng: number, lat: number, deg = 0.09): Promise<number | null> {
+  const params = new URLSearchParams({
+    geometry: `${lng - deg},${lat - deg},${lng + deg},${lat + deg}`, geometryType: "esriGeometryEnvelope",
+    inSR: "4326", spatialRel: "esriSpatialRelIntersects", returnCountOnly: "true", f: "json",
+  });
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 20000);
+  try {
+    const res = await fetch(`${url}?${params.toString()}`, { signal: ctrl.signal, headers: { "User-Agent": "Haxax/1.0" } });
+    if (!res.ok) return null;
+    const j: any = await res.json();
+    return typeof j.count === "number" ? j.count : null;
+  } catch { return null; } finally { clearTimeout(to); }
+}
+
 /** Parse one GeoJSON feature from SLIP into a normalised RawTenement. */
 function parseFeature(f: any): RawTenement | null {
   const p = f?.properties ?? {};
@@ -129,12 +168,15 @@ function parseFeature(f: any): RawTenement | null {
   const poly = simplifyRing(ring);
   const geomHa = ringAreaHa(ring, c.lat);
   const areaHa = geomHa > 5 ? geomHa : unitHectares(Number(p.legal_area), p.unit_of_me);
-  const holders = [p.holder1, p.holder2, p.holder3].filter((h: any) => h && String(h).trim()).map((h: any) => String(h).trim());
+  const holders = [p.holder1, p.holder2, p.holder3, p.holder4, p.holder5].filter((h: any) => h && String(h).trim()).map((h: any) => String(h).trim());
   return {
     id: String(p.fmt_tenid ?? "").replace(/\s+/g, " ").trim() || `T${Math.round(c.lng * 1000)}`,
     rawType: String(p.type ?? "MINING LEASE"),
     status: String(p.tenstatus ?? "LIVE"),
     holders: holders.length ? holders : ["Holder withheld"],
+    holderAddress: p.addr1 ? titleCaseLite(String(p.addr1).trim()) : undefined,
+    survStatus: p.survstatus ? String(p.survstatus).trim() : undefined,
+    special: p.special_in ? String(p.special_in).trim() : undefined,
     grantDate: typeof p.grantdate === "number" ? p.grantdate : null,
     startDate: typeof p.startdate === "number" ? p.startdate : null,
     endDate: typeof p.enddate === "number" ? p.enddate : null,
@@ -304,11 +346,9 @@ async function lookupTenement(id: string): Promise<Tenement | null> {
     const json: any = await res.json();
     const raw = parseFeature((json.features ?? [])[0]);
     if (!raw) return null;
-    const t = enrichTenement(raw, Date.now(), cache.data?.deposits);
-    // borrow comps + region percentile from the cached live set for context
+    const t = enrichTenement(raw, Date.now(), cache.data?.deposits, cache.data?.drillPoints);
+    // borrow region percentile from the cached live set for context
     if (cache.data) {
-      const rel = cache.data.comps.filter((c) => c.region === t.regionId || c.commodity === t.commodities[0]);
-      t.comps = (rel.length ? rel : cache.data.comps).slice(0, 3).map((c) => c.id);
       const peers = cache.data.tenements.filter((x) => x.regionId === t.regionId);
       if (peers.length) t.scorePercentile = Math.round((peers.filter((p) => p.score < t.score).length / peers.length) * 100);
     }
@@ -342,7 +382,7 @@ async function refresh(): Promise<void> {
       }
     }
     if (raws.length === 0) throw new Error("no records returned from SLIP");
-    const enriched = enrichAll(raws, Date.now(), deposits);
+    const enriched = enrichAll(raws, Date.now(), deposits, drillPoints);
 
     // change detection vs previous refresh → genuine register-change alerts
     if (prevSnap.size) {
@@ -573,6 +613,40 @@ const server = http.createServer(async (req, res) => {
     } catch {
       send(res, 200, { neighbours: [], dominantHolder: null, dominantCount: 0, total: 0 });
     }
+    return;
+  }
+
+  if (url.pathname === "/api/context") {
+    const lng = Number(url.searchParams.get("lng"));
+    const lat = Number(url.searchParams.get("lat"));
+    if (!isFinite(lng) || !isFinite(lat)) { send(res, 400, { error: "lng & lat required" }); return; }
+    const [geo, mf, lga, ntDet, ntClaim, wamex, drills, sheet] = await Promise.all([
+      arcgisPointAttrs(L_GEOLOGY, lng, lat, "unitname,code,descriptn"),
+      arcgisPointAttrs(L_MINFIELD, lng, lat, "mfield,mdistrict,number_"),
+      arcgisPointAttrs(L_LGA, lng, lat, "name"),
+      arcgisPointAttrs(L_NT_DET, lng, lat, "*"),
+      arcgisPointAttrs(L_NT_CLAIM, lng, lat, "native_title_application,status_of_application,federal_court_reference,nntt_no"),
+      arcgisCount(L_WAMEX, lng, lat),
+      arcgisCount(DRILLHOLES, lng, lat),
+      arcgisPointAttrs(L_MAPSHEET, lng, lat, "*"),
+    ]);
+    const geology = geo && geo.unitname ? { unit: String(geo.unitname).trim(), code: String(geo.code ?? "").trim(), description: String(geo.descriptn ?? "").trim() } : null;
+    const mineralField = mf && mf.mfield ? { field: String(mf.mfield).trim(), district: String(mf.mdistrict ?? "").trim(), number: String(mf.number_ ?? "").trim() } : null;
+    const lgaName = lga && lga.name ? titleCaseLite(String(lga.name).trim()) : null;
+    let nativeTitle: any = null;
+    if (ntDet) {
+      nativeTitle = { name: String(ntDet.determination_name ?? ntDet.name ?? ntDet.short_name ?? "Native title determination").trim(), status: "Determined", type: "Determination", reference: String(ntDet.federal_court_no ?? ntDet.wad ?? ntDet.tribunal_file_no ?? "").trim() };
+    } else if (ntClaim && ntClaim.native_title_application) {
+      nativeTitle = { name: String(ntClaim.native_title_application).trim(), status: String(ntClaim.status_of_application ?? "").trim(), type: "Registered claim", reference: String(ntClaim.federal_court_reference ?? ntClaim.nntt_no ?? "").trim() };
+    }
+    const sheetName = sheet ? (sheet.map_name ?? sheet.name ?? sheet.sheet ?? sheet.label ?? sheet.mapsheet ?? sheet.sheet_name ?? null) : null;
+    send(res, 200, {
+      geology, mineralField, lga: lgaName, nativeTitle,
+      mapSheet: sheetName ? String(sheetName).trim() : null,
+      wamexReports: wamex, drillHolesNearby: drills,
+      source: "DMIRS / GSWA / Landgate / NNTT — SLIP public services",
+      fetchedAt: new Date().toISOString(),
+    });
     return;
   }
 

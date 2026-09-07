@@ -3,10 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { Crosshair, Flame, Layers3, Map as MapIcon, ShieldAlert, TrendingUp } from "lucide-react";
 import { useStore } from "../lib/store";
 import { REGIONS, REGION_MAP } from "../lib/geo";
-import { daysUntil, expiryLabel, fmtHa, fmtMoneyM, fmtNum, relTime } from "../lib/format";
+import { daysUntil, expiryLabel, fmtHa, fmtNum, relTime } from "../lib/format";
 import { useTick } from "../lib/hooks";
 import { ActionBadge, CommodityTag, KpiTile, ScoreChip, SeverityDot, sevColor } from "../components/ui";
-import type { DealStage, Tenement } from "../lib/types";
+import type { DealStage } from "../lib/types";
 
 const STAGE_LABEL: Record<DealStage, string> = {
   lead: "New lead", reviewing: "Reviewing", contacted: "Contacted",
@@ -25,14 +25,13 @@ export function Overview() {
   const select = useStore((s) => s.select);
   const toggleScan = useStore((s) => s.toggleScan);
   const alerts = useStore((s) => s.alerts);
-  const watchlist = useStore((s) => s.watchlist);
   const deals = useStore((s) => s.deals);
   const tenements = useStore((s) => s.tenements);
   const stats = useStore((s) => s.stats);
   useTick(30000);
 
   const avg = useMemo(() => Math.round(tenements.reduce((a, t) => a + t.score, 0) / (tenements.length || 1)), [tenements]);
-  const flipCount = useMemo(() => tenements.filter((t) => t.econ.play === "Flip").length, [tenements]);
+  const oppCount = useMemo(() => tenements.filter((t) => (t.opportunity?.score ?? 0) >= 70).length, [tenements]);
   const expiring = useMemo(
     () => tenements.filter((t) => { const d = daysUntil(t.expiryDate); return d >= 0 && d < 545; }).sort((a, b) => b.score - a.score),
     [tenements],
@@ -73,7 +72,7 @@ export function Overview() {
       <div className="page-body">
         <div className="grid-kpis">
           <KpiTile label="Acquire-grade (85+)" value={stats.highScore} accent="var(--score-high)" sub="screen as Acquire" delta={{ value: "+2 wk", dir: "up" }} spark={series(7)} />
-          <KpiTile label="Flip candidates" value={flipCount} accent="var(--accent)" sub="buy-low / on-sell" delta={{ value: "+3", dir: "up" }} spark={series(4)} />
+          <KpiTile label="High opportunity (70+)" value={oppCount} accent="var(--accent)" sub="overlooked / near-expiry" />
           <KpiTile label="Expiring < 18 mo" value={expiring.length} accent="var(--score-mid)" sub="acquisition windows" delta={{ value: "live", dir: "flat" }} />
           <KpiTile label="Mean Haxax" value={avg} sub="portfolio average" delta={{ value: "+1.4", dir: "up" }} spark={series(11)} />
           <KpiTile label="Ground coverage" value={fmtHa(stats.totalAreaHa)} sub="graticular area" />
@@ -92,7 +91,7 @@ export function Overview() {
                 <thead>
                   <tr>
                     <th>Score</th><th>Tenement</th><th>Holder</th><th>Region</th><th>Comm.</th>
-                    <th className="num">Implied EV</th><th className="num">Flip Δ</th><th>Call</th>
+                    <th className="num">Deposits ≤25km</th><th className="num">Drill ≤10km</th><th>Screen</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -103,8 +102,8 @@ export function Overview() {
                       <td className="tight t-strong">{t.holder}</td>
                       <td className="tight">{REGION_MAP[t.regionId].name}</td>
                       <td className="tight"><CommodityTag c={t.commodities[0]} dot /></td>
-                      <td className="tight num t-strong">{fmtMoneyM(t.econ.impliedEvMidM)}</td>
-                      <td className="tight num" style={{ color: t.econ.upliftPct >= 40 ? "var(--score-high)" : "var(--text-secondary)" }}>+{t.econ.upliftPct}%</td>
+                      <td className="tight num t-strong">{t.endowment}</td>
+                      <td className="tight num">{fmtNum(t.drillHolesNearby)}</td>
                       <td className="tight"><ActionBadge action={t.action} /></td>
                     </tr>
                   ))}
@@ -159,7 +158,7 @@ export function Overview() {
               <thead>
                 <tr>
                   <th>Score</th><th>Tenement</th><th>Holder</th><th>Region</th>
-                  <th className="num">Expiry</th><th className="num">Holding cost</th><th className="num">Implied EV</th><th>Call</th>
+                  <th className="num">Expiry</th><th className="num">Deposits ≤25km</th><th className="num">Drill ≤10km</th><th>Screen</th>
                 </tr>
               </thead>
               <tbody>
@@ -170,8 +169,8 @@ export function Overview() {
                     <td className="tight">{t.holder}</td>
                     <td className="tight">{REGION_MAP[t.regionId].name}</td>
                     <td className="tight num" style={{ color: "var(--score-mid)" }}>{expiryLabel(t.expiryDate)}</td>
-                    <td className="tight num">A${fmtNum(t.econ.holdingCostPa)}</td>
-                    <td className="tight num t-strong">{fmtMoneyM(t.econ.impliedEvMidM)}</td>
+                    <td className="tight num t-strong">{t.endowment}</td>
+                    <td className="tight num">{fmtNum(t.drillHolesNearby)}</td>
                     <td className="tight"><ActionBadge action={t.action} /></td>
                   </tr>
                 ))}

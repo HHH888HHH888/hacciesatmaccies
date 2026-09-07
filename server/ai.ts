@@ -36,13 +36,13 @@ export const aiEnabled = () => aiProvider() !== null;
 
 const SYSTEM =
   "You are Haxax, a Western Australian mining-tenement acquisitions analyst. Haxax's mission is to find " +
-  "UNDERVALUED, NEAR-EXPIRY, or OLD-BUT-STILL-RESOURCED tenements and deposits that the market has overlooked. " +
+  "OVERLOOKED, NEAR-EXPIRY, or OLD-BUT-STILL-RESOURCED tenements near real mineral endowment. " +
   "You are given a single tenement's LIVE DMIRS/SLIP register facts, the nearby real MINEDEX mines/deposits, " +
-  "and the Haxax scoring/economics/targeting outputs. Write a concise, sober investment-committee read focused on: " +
-  "(1) is this overlooked / mispriced relative to its endowment? (2) does the nearby & historic mineralisation imply " +
-  "remaining resources worth re-testing? (3) what is the acquisition/flip leverage (expiry, ownership, royalties)? " +
+  "the real drill-collar density, and the Haxax scoring/targeting outputs. Write a concise, sober read focused on: " +
+  "(1) is this overlooked relative to the real endowment around it? (2) does the nearby recorded mineralisation and " +
+  "drilling imply ground worth re-testing? (3) what is the acquisition leverage (expiry timing, ownership, holder type)? " +
   "CRITICAL: ground every statement ONLY in the supplied facts. NEVER invent grades, tonnages, JORC resources, drill " +
-  "results or commodities not provided. If evidence is thin, say so plainly and lower confidence. " +
+  "results, sale prices or a valuation — none are provided and none exist in the public register. If evidence is thin, say so and lower confidence. " +
   "Respond with STRICT JSON only (no markdown, no prose) matching exactly: " +
   '{"verdict": string (max 8 words), "upside": [exactly 3 short strings], "risks": [exactly 3 short strings], ' +
   '"thesis": string (2-3 sentences), "nextStep": string, "confidence": number 0-100}';
@@ -50,19 +50,19 @@ const SYSTEM =
 function factsFor(t: Tenement): string {
   const f = t.factors.map((x) => `${x.label} ${x.value}/100 (w${Math.round(x.weight * 100)}%)`).join("; ");
   const mines = t.nearbyMines.map((m) => `${m.name} (${m.commodity}, ${m.distanceKm}km, ${m.status})`).join("; ");
+  const yr = (iso: string) => iso.slice(0, 10);
+  const hasExpiry = new Date(t.expiryDate).getFullYear() > 1971;
   return [
-    `Tenement ${t.id}: ${t.licenceType} licence, status ${t.status}, holder ${t.holder} (${t.holderType}).`,
-    `Region ${t.regionId}, district ${t.district}. Area ${Math.round(t.areaHa)} ha. Granted ${t.grantDate.slice(0, 10)}, expires ${t.expiryDate.slice(0, 10)}.`,
-    `Inferred commodity focus: ${t.commodities.join(", ")}. Nearby mines/deposits: ${mines || "none recorded"}.`,
-    `Geology: ${t.geologySummary} History: ${t.historicalActivity}`,
-    `Ownership: ${t.ownershipComplexity}. Encumbrances: ${t.encumbrances.join("; ") || "none"}.`,
-    `Haxax Score ${t.score}/100 (region percentile P${t.scorePercentile}); factors: ${f}.`,
-    t.target
-      ? `Analog targeting: ${t.target.score}/100 — ${t.target.endowment} recorded deposits within 25 km (nearest analogs: ${t.target.analogs.join(", ") || "none"}). ${t.target.rationale}`
-      : "Analog targeting: not computed.",
-    `Economics: implied EV A$${t.econ.impliedEvMidM}m, est. acquisition cost A$${t.econ.acqCostM}m, recommended max bid A$${t.econ.maxBidM}m, flip uplift ${t.econ.upliftPct}%, holding cost A$${t.econ.holdingCostPa}/yr, suggested play ${t.econ.play}.`,
-    `Suggested call (model): ${t.action}.`,
-  ].join("\n");
+    `Tenement ${t.id}: ${t.licenceType} licence, status ${t.status}, held by ${t.holder}${t.holders.length > 1 ? ` and ${t.holders.length - 1} other registered party(ies)` : ""} (${t.holderType}${t.holderAddress ? `, registered address ${t.holderAddress}` : ""}).`,
+    `Region ${t.regionId}, near ${t.district}. Area ${Math.round(t.areaHa)} ha (~${t.blocks} graticular blocks). Survey status: ${t.surveyStatus}. Ownership: ${t.ownershipComplexity}.`,
+    `Granted ${yr(t.grantDate)}${hasExpiry ? `, expires ${yr(t.expiryDate)}` : ", no expiry date on the register"}.`,
+    `Commodity focus is INFERRED from the nearest MINEDEX deposit — it is NOT stated on the tenement itself: ${t.commodities.join(", ")}.`,
+    `Real nearby MINEDEX mines/deposits: ${mines || "none recorded within 120 km"}. Recorded deposits within 25 km: ${t.endowment}. Real drill collars within 10 km: ${t.drillHolesNearby}.`,
+    t.target ? `Endowment / analog signal: ${t.target.score}/100 — ${t.target.rationale}` : "",
+    `Haxax indicator ${t.score}/100 (region percentile P${t.scorePercentile}); component factors: ${f}.`,
+    "IMPORTANT: the public register carries NO valuation, sale price, rent, expenditure, royalty, grade, tonnage or JORC resource for this tenement. Do NOT state or estimate any dollar figure, grade or resource. Assess ONLY on the real facts above — endowment, proximity, drill density, age, expiry, holder.",
+    `Suggested screen (Haxax model): ${t.action}.`,
+  ].filter(Boolean).join("\n");
 }
 
 async function callMiniMax(prompt: string, system: string): Promise<string> {
@@ -98,10 +98,13 @@ async function callClaude(prompt: string, system: string): Promise<string> {
 
 const MEMO_SYSTEM =
   "You are Haxax, a Western Australian mining-tenement acquisitions analyst writing a formal Investment Committee memo " +
-  "for a single tenement. Haxax's mission: surface undervalued, near-expiry, or old-but-still-resourced ground. " +
-  "Ground EVERYTHING ONLY in the supplied live register facts, nearby MINEDEX deposits and Haxax outputs. " +
-  "NEVER invent grades, tonnages, JORC resources or drill results. For valuation, reference only the implied EV / economics " +
-  "provided — do not fabricate new figures. Respond with STRICT JSON only (no markdown) matching exactly: " +
+  "for a single tenement. Haxax's mission: surface overlooked, near-expiry, or old-but-still-resourced ground near real endowment. " +
+  "Ground EVERYTHING ONLY in the supplied live register facts, nearby real MINEDEX deposits, real drill density and Haxax outputs. " +
+  "NEVER invent grades, tonnages, JORC resources, drill results, sale prices or a dollar valuation — the public register has none. " +
+  "For the 'valuation' field, do NOT state any figure; instead explain what real evidence bears on value (endowment, proximity to " +
+  "producing mines, drilling density, area, expiry leverage) and state plainly that a defensible valuation needs primary data " +
+  "(comparable transactions, JORC resource, exploration results) not in the public register. For 'geology', describe only the real " +
+  "nearby deposits/endowment — do not invent bedrock detail. Respond with STRICT JSON only (no markdown) matching exactly: " +
   '{"summary": string (2-3 sentences), "thesis": string (3-4 sentences), "upside": [exactly 3 strings], ' +
   '"risks": [exactly 3 strings], "geology": string (2-3 sentences), "valuation": string (2 sentences), ' +
   '"recommendation": string (1-2 sentences with a clear call), "nextStep": string, "confidence": number 0-100}';
@@ -148,7 +151,7 @@ export async function generateMemo(t: Tenement): Promise<AiMemo | null> {
       thesis: String(o.thesis || t.ai.thesis),
       upside: Array.isArray(o.upside) && o.upside.length ? o.upside.slice(0, 3).map(String) : t.ai.upside,
       risks: Array.isArray(o.risks) && o.risks.length ? o.risks.slice(0, 3).map(String) : t.ai.risks,
-      geology: String(o.geology || t.geologySummary),
+      geology: String(o.geology || ""),
       valuation: String(o.valuation || ""),
       recommendation: String(o.recommendation || t.ai.verdict),
       nextStep: String(o.nextStep || t.ai.nextStep),

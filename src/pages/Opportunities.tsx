@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Crosshair, Download } from "lucide-react";
 import { useStore } from "../lib/store";
 import { REGION_MAP } from "../lib/geo";
-import { fmtMoneyM, expiryLabel } from "../lib/format";
+import { expiryLabel } from "../lib/format";
 import { downloadCsv, stamp } from "../lib/csv";
 import { ActionBadge, CommodityTag, EmptyState, KpiTile, ScoreChip } from "../components/ui";
 
@@ -65,7 +65,7 @@ export function Opportunities() {
                   <thead>
                     <tr>
                       <th className="num">Opp</th><th>Score</th><th>Tenement</th><th>Holder</th><th>Region</th>
-                      <th>Signals</th><th className="num">Expiry</th><th className="num">Implied EV</th><th>Call</th>
+                      <th>Signals</th><th className="num">Expiry</th><th className="num">Deposits ≤25km</th><th>Screen</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -86,8 +86,8 @@ export function Opportunities() {
                             <CommodityTag c={t.commodities[0]} dot />
                           </span>
                         </td>
-                        <td className="tight num" style={{ color: "var(--score-mid)" }}>{expiryLabel(t.expiryDate)}</td>
-                        <td className="tight num t-strong">{fmtMoneyM(t.econ.impliedEvMidM)}</td>
+                        <td className="tight num" style={{ color: "var(--score-mid)" }}>{new Date(t.expiryDate).getFullYear() > 1971 ? expiryLabel(t.expiryDate) : "—"}</td>
+                        <td className="tight num t-strong">{t.endowment}</td>
                         <td className="tight"><ActionBadge action={t.action} /></td>
                       </tr>
                     ))}

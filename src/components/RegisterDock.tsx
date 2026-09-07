@@ -4,12 +4,12 @@ import type { Tenement } from "../lib/types";
 import { useStore } from "../lib/store";
 import { downloadCsv, stamp } from "../lib/csv";
 import { REGION_MAP } from "../lib/geo";
-import { daysUntil, expiryLabel, fmtMoneyM, fmtNum } from "../lib/format";
+import { daysUntil, expiryLabel, fmtNum } from "../lib/format";
 import { ActionBadge, CommodityTag, ScoreChip } from "./ui";
 
 type Key =
   | "score" | "opp" | "id" | "holder" | "licenceType" | "status" | "region"
-  | "commodity" | "areaHa" | "expiry" | "rent" | "ev" | "uplift" | "action";
+  | "commodity" | "areaHa" | "expiry" | "endow" | "drill" | "survey" | "action";
 
 interface Col {
   key: Key;
@@ -33,9 +33,9 @@ const COLS: Col[] = [
       const d = daysUntil(t.expiryDate);
       return <span style={{ color: d < 0 ? "var(--score-low)" : d < 365 ? "var(--score-mid)" : "var(--text-secondary)" }}>{expiryLabel(t.expiryDate)}</span>;
     } },
-  { key: "rent", label: "Rent p.a.", num: true, sortVal: (t) => t.register.rentPerYear, render: (t) => `A$${fmtNum(t.register.rentPerYear)}` },
-  { key: "ev", label: "Implied EV", num: true, sortVal: (t) => t.econ.impliedEvMidM, render: (t) => <span className="t-strong">{fmtMoneyM(t.econ.impliedEvMidM)}</span> },
-  { key: "uplift", label: "Flip Δ", num: true, sortVal: (t) => t.econ.upliftPct, render: (t) => <span style={{ color: t.econ.upliftPct >= 40 ? "var(--score-high)" : "var(--text-secondary)" }}>+{t.econ.upliftPct}%</span> },
+  { key: "endow", label: "Deposits ≤25km", num: true, sortVal: (t) => t.endowment, render: (t) => <span className="t-strong">{t.endowment}</span> },
+  { key: "drill", label: "Drill ≤10km", num: true, sortVal: (t) => t.drillHolesNearby, render: (t) => fmtNum(t.drillHolesNearby) },
+  { key: "survey", label: "Survey", sortVal: (t) => t.surveyStatus, render: (t) => <span className="secondary">{t.surveyStatus}</span> },
   { key: "action", label: "Call", sortVal: (t) => t.action, render: (t) => <ActionBadge action={t.action} /> },
 ];
 

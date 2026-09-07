@@ -1,31 +1,29 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
-  Banknote,
+  Building2,
   CalendarClock,
   Crosshair,
+  Database,
   FileText,
   Gavel,
   Layers,
   Locate,
   Mountain,
   Network,
-  Receipt,
+  Pickaxe,
   ScrollText,
   ShieldAlert,
   Star,
-  TrendingUp,
   X,
 } from "lucide-react";
 import { useStore } from "../lib/store";
 import { REGION_MAP } from "../lib/geo";
-import { daysUntil, fmtDate, fmtHa, fmtKm2, fmtMoneyM, fmtNum, fmtPerHa, expiryLabel, relTime } from "../lib/format";
+import { daysUntil, fmtDate, fmtHa, fmtKm2, fmtNum, expiryLabel, relTime } from "../lib/format";
 import { bandColor } from "../lib/scoring";
-import type { AIOpinion, SuggestedAction, Tenement } from "../lib/types";
+import type { AIOpinion, RealContext, SuggestedAction, Tenement } from "../lib/types";
 import {
-  ActionBadge,
   CommodityTag,
-  Pill,
   RadialScore,
   RiskBadge,
   StatusBadge,
@@ -41,17 +39,19 @@ interface Neighbours {
   total: number;
 }
 
-type Tab = "brief" | "econ" | "score" | "tenure" | "activity";
+type Tab = "brief" | "context" | "score" | "tenure" | "activity";
 const TABS: { id: Tab; label: string }[] = [
   { id: "brief", label: "Brief" },
-  { id: "econ", label: "Economics" },
-  { id: "score", label: "Score" },
-  { id: "tenure", label: "Tenure" },
-  { id: "activity", label: "Activity" },
+  { id: "context", label: "Context" },
+  { id: "score", label: "Indicator" },
+  { id: "tenure", label: "Register" },
+  { id: "activity", label: "Dates" },
 ];
 
 const actionColor = (a: SuggestedAction) =>
   a === "Acquire" ? "var(--score-high)" : a === "Investigate" ? "var(--info)" : a === "Monitor" ? "var(--score-mid)" : "var(--score-low)";
+
+const hasRealExpiry = (t: Tenement) => new Date(t.expiryDate).getFullYear() > 1971;
 
 export function DetailDrawer() {
   const selectedId = useStore((s) => s.selectedId);
@@ -83,13 +83,19 @@ export function DetailDrawer() {
 
   // real neighbouring ground from the live register (consolidation intelligence)
   const [neighbours, setNeighbours] = useState<Neighbours | null>(null);
+  // real statutory + geological context from live government layers
+  const [ctx, setCtx] = useState<RealContext | null>(null);
   useEffect(() => {
-    setNeighbours(null);
+    setNeighbours(null); setCtx(null);
     if (!t) return;
     let cancelled = false;
     fetch(`/api/neighbours?lng=${t.lng}&lat=${t.lat}&id=${encodeURIComponent(t.id)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (!cancelled && d) setNeighbours(d); })
+      .catch(() => {});
+    fetch(`/api/context?lng=${t.lng}&lat=${t.lat}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled && d) setCtx(d); })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [t?.id]);
@@ -114,7 +120,7 @@ export function DetailDrawer() {
                 <div style={{ minWidth: 0 }}>
                   <div className="detail-id">{t.id}</div>
                   <div className="detail-sub">
-                    {t.licenceType} · {t.register.mineralField} · {REGION_MAP[t.regionId].name}
+                    {t.licenceType} · {ctx?.mineralField ? `${ctx.mineralField.field} M.F.` : REGION_MAP[t.regionId].name}
                   </div>
                 </div>
                 <div className="detail-head-actions">
@@ -141,12 +147,12 @@ export function DetailDrawer() {
               </div>
             </div>
 
-            {/* decision strip — the buy / flip / monitor / avoid call */}
+            {/* decision strip — the screen call, with the opportunity signal */}
             <div className="decision-strip" style={{ ["--dc" as string]: actionColor(t.action) } as React.CSSProperties}>
               <div>
                 <div className="decision-word">{t.action.toUpperCase()}</div>
                 <div className="decision-sub">
-                  Play: {t.econ.play} · conviction {t.ai.confidence}% · {t.riskFlags.length} risk flag{t.riskFlags.length === 1 ? "" : "s"}
+                  Opportunity {t.opportunity?.score ?? "—"} · conviction {t.ai.confidence}% · {t.riskFlags.length} flag{t.riskFlags.length === 1 ? "" : "s"}
                 </div>
               </div>
               <div>
@@ -168,13 +174,16 @@ export function DetailDrawer() {
 
             <div className="detail-scroll">
               {tab === "brief" && <BriefTab t={t} aiNote={aiNote} neighbours={neighbours} />}
-              {tab === "econ" && <EconTab t={t} />}
+              {tab === "context" && <ContextTab ctx={ctx} />}
               {tab === "score" && <ScoreTab t={t} />}
-              {tab === "tenure" && <TenureTab t={t} />}
+              {tab === "tenure" && <TenureTab t={t} ctx={ctx} />}
               {tab === "activity" && (
                 <div className="detail-section">
-                  <div className="detail-section-title"><CalendarClock size={13} className="dst-icon" /> Event history</div>
+                  <div className="detail-section-title"><CalendarClock size={13} className="dst-icon" /> Register dates</div>
                   <TenementTimeline events={t.timeline} />
+                  <p className="prose faint" style={{ fontSize: "var(--fs-10)", marginTop: "var(--sp-2)" }}>
+                    Only statutory dates on the DMIRS register are shown — grant, term start and expiry. No exploration or drilling events are inferred.
+                  </p>
                 </div>
               )}
             </div>
@@ -190,7 +199,7 @@ export function DetailDrawer() {
                 </button>
               </div>
               <div className="faint" style={{ fontSize: "var(--fs-10)", marginTop: "var(--sp-2)", textAlign: "center" }}>
-                Updated {relTime(t.lastUpdated)} · DMIRS / SLIP register · MINEDEX · GeoVIEW.WA
+                Updated {relTime(t.lastUpdated)} · DMIRS / SLIP register · MINEDEX · GSWA · NNTT
               </div>
             </div>
           </>
@@ -218,32 +227,28 @@ function BriefTab({ t, aiNote, neighbours }: { t: Tenement; aiNote?: (AIOpinion 
         <AIOpinionCard t={t} opinion={aiNote ?? undefined} provider={aiNote?.provider} />
       </div>
       <div className="detail-section">
-        <div className="detail-section-title"><Mountain size={13} className="dst-icon" /> Nearby mines & deposits</div>
-        <div className="mini-list">
-          {t.nearbyMines.map((m, i) => (
-            <div className="mini-row" key={i}>
-              <span className="mr-main">{m.name}</span>
-              <CommodityTag c={m.commodity} dot />
-              <span className="mr-meta">{m.distanceKm} km · {m.status}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="detail-section">
-        <div className="detail-section-title"><Layers size={13} className="dst-icon" /> Geology & history</div>
-        <p className="prose">{t.geologySummary}</p>
-        <p className="prose" style={{ marginTop: "var(--sp-2)" }}>{t.historicalActivity}</p>
-        <p className="prose" style={{ marginTop: "var(--sp-2)" }}>{t.strategicNotes}</p>
+        <div className="detail-section-title"><Mountain size={13} className="dst-icon" /> Nearby mines & deposits (MINEDEX)</div>
+        {t.nearbyMines.length ? (
+          <div className="mini-list">
+            {t.nearbyMines.map((m, i) => (
+              <div className="mini-row" key={i}>
+                <span className="mr-main">{m.name}</span>
+                <CommodityTag c={m.commodity} dot />
+                <span className="mr-meta">{m.distanceKm} km · {m.status}</span>
+              </div>
+            ))}
+          </div>
+        ) : <p className="prose">No MINEDEX deposit recorded within 120 km of this ground.</p>}
       </div>
       {t.target && (
         <div className="detail-section">
-          <div className="detail-section-title"><Crosshair size={13} className="dst-icon" /> AI prospectivity targeting</div>
+          <div className="detail-section-title"><Crosshair size={13} className="dst-icon" /> Endowment targeting</div>
           <div className="row center gap-3" style={{ marginBottom: "var(--sp-2)" }}>
             <span className="mono" style={{ fontSize: "var(--fs-22)", fontWeight: 800, color: t.target.score >= 75 ? "var(--score-high)" : t.target.score >= 62 ? "var(--accent)" : "var(--text-secondary)" }}>
               {t.target.score}<span className="faint" style={{ fontSize: "var(--fs-11)" }}>/100</span>
             </span>
             <div className="muted" style={{ fontSize: "var(--fs-11)" }}>
-              Target score · {t.target.endowment} recorded deposits within 25 km · nearest {t.target.nearestKm} km
+              {t.target.endowment} recorded deposits within 25 km · nearest {t.target.nearestKm} km · {t.drillHolesNearby} drill collars ≤10 km
             </div>
           </div>
           <p className="prose">{t.target.rationale}</p>
@@ -252,9 +257,6 @@ function BriefTab({ t, aiNote, neighbours }: { t: Tenement; aiNote?: (AIOpinion 
               {t.target.analogs.map((a) => <span key={a} className="acquirer-chip">{a}</span>)}
             </div>
           )}
-          <p className="prose faint" style={{ fontSize: "var(--fs-10)", marginTop: "var(--sp-2)" }}>
-            Analog / nearology lead derived from nearby MINEDEX deposits — a prospectivity signal, not a confirmed deposit.
-          </p>
         </div>
       )}
       <div className="detail-section">
@@ -263,7 +265,7 @@ function BriefTab({ t, aiNote, neighbours }: { t: Tenement; aiNote?: (AIOpinion 
           <div className="flag-wrap">
             {t.riskFlags.map((r, i) => <RiskBadge key={i} level={r.level} label={r.label} />)}
           </div>
-        ) : <p className="prose">No material risk flags on record — clean profile.</p>}
+        ) : <p className="prose">No date- or title-based risk flags on the register.</p>}
       </div>
 
       {neighbours && neighbours.neighbours.length > 0 && (
@@ -290,75 +292,68 @@ function BriefTab({ t, aiNote, neighbours }: { t: Tenement; aiNote?: (AIOpinion 
   );
 }
 
-/* ---------- Economics ---------- */
-function EconTab({ t }: { t: Tenement }) {
-  const e = t.econ;
-  const allComps = useStore((s) => s.comps);
-  const comps = allComps.filter((c) => t.comps.includes(c.id));
+/* ---------- Context (real government layers, on-demand) ---------- */
+function ContextTab({ ctx }: { ctx: RealContext | null }) {
+  if (!ctx) {
+    return (
+      <div className="detail-section">
+        <div className="detail-section-title"><Layers size={13} className="dst-icon" /> Statutory & geological context</div>
+        <p className="prose muted">Querying live DMIRS / GSWA / Landgate / NNTT layers…</p>
+      </div>
+    );
+  }
   return (
     <>
       <div className="detail-section">
-        <div className="detail-section-title"><TrendingUp size={13} className="dst-icon" /> Acquisition thesis · {e.play}</div>
-        <div className="econ-hero">
-          <div>
-            <span className="eyebrow">Implied value (comparables)</span>
-            <div className="eh-val" style={{ color: "var(--accent)" }}>A${e.impliedEvLowM.toFixed(1)}–{e.impliedEvHighM.toFixed(1)}m</div>
-          </div>
-          <div className="text-right">
-            <span className="eyebrow">EV / ha</span>
-            <div className="mono" style={{ fontSize: "var(--fs-14)", fontWeight: 700 }}>{fmtPerHa(e.evPerHa)}</div>
-          </div>
-        </div>
+        <div className="detail-section-title"><Mountain size={13} className="dst-icon" /> Bedrock geology (GSWA)</div>
+        {ctx.geology ? (
+          <>
+            <div className="reg-list">
+              <Reg k="Unit" v={ctx.geology.unit} />
+              <Reg k="Code" v={ctx.geology.code} mono />
+            </div>
+            {ctx.geology.description && <p className="prose" style={{ marginTop: "var(--sp-2)" }}>{ctx.geology.description}</p>}
+          </>
+        ) : <p className="prose muted">No interpreted bedrock unit at this point.</p>}
+      </div>
 
-        <div className="econ-grid">
-          <div className="econ-cell">
-            <span className="eyebrow">Est. acquisition cost</span>
-            <span className="ev">{fmtMoneyM(e.acqCostM)}</span>
-          </div>
-          <div className="econ-cell">
-            <span className="eyebrow">Recommended max bid</span>
-            <span className="ev">{fmtMoneyM(e.maxBidM)}</span>
-          </div>
-          <div className="econ-cell">
-            <span className="eyebrow">Flip uplift (mid)</span>
-            <span className="ev" style={{ color: e.upliftPct >= 40 ? "var(--score-high)" : "var(--text-primary)" }}>+{e.upliftPct}%</span>
-          </div>
-          <div className="econ-cell">
-            <span className="eyebrow">Holding cost p.a.</span>
-            <span className="ev">A${fmtNum(e.holdingCostPa)}</span>
-          </div>
-        </div>
-
-        <div className="ai-thesis" style={{ marginTop: "var(--sp-3)" }}>{e.flipThesis}</div>
-
-        <div style={{ marginTop: "var(--sp-3)" }}>
-          <span className="eyebrow" style={{ display: "block", marginBottom: 6 }}>Likely strategic acquirers</span>
-          <div className="row gap-2 wrap">
-            {e.acquirers.map((a) => <span key={a} className="acquirer-chip"><Banknote size={11} /> {a}</span>)}
-          </div>
+      <div className="detail-section">
+        <div className="detail-section-title"><Pickaxe size={13} className="dst-icon" /> Mineral field & jurisdiction</div>
+        <div className="reg-list">
+          <Reg k="Mineral field" v={ctx.mineralField ? `${ctx.mineralField.field} (${ctx.mineralField.number})` : "—"} />
+          <Reg k="Mining district" v={ctx.mineralField?.district ?? "—"} />
+          <Reg k="Local govt area" v={ctx.lga ?? "—"} />
+          <Reg k="1:250k map sheet" v={ctx.mapSheet ?? "—"} mono />
         </div>
       </div>
 
       <div className="detail-section">
-        <div className="detail-section-title">Comparable transactions</div>
-        <div className="mini-list">
-          {comps.map((c) => (
-            <div className="mini-row" key={c.id} style={{ flexWrap: "wrap" }}>
-              <span className="mr-main">{c.project}</span>
-              <span className="mr-meta">{c.type}</span>
-              <div style={{ flexBasis: "100%", display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                <span className="faint" style={{ fontSize: "var(--fs-11)" }}>{fmtDate(c.date)} · {fmtHa(c.areaHa)}</span>
-                <span className="mono secondary" style={{ fontSize: "var(--fs-11)" }}>{fmtPerHa(c.evPerHa)}</span>
-              </div>
-            </div>
-          ))}
+        <div className="detail-section-title"><Gavel size={13} className="dst-icon" /> Native title (NNTT / Federal Court)</div>
+        {ctx.nativeTitle ? (
+          <div className="reg-list">
+            <Reg k="Application" v={ctx.nativeTitle.name} />
+            <Reg k="Type" v={ctx.nativeTitle.type} />
+            <Reg k="Status" v={ctx.nativeTitle.status} />
+            {ctx.nativeTitle.reference && <Reg k="Reference" v={ctx.nativeTitle.reference} mono />}
+          </div>
+        ) : <p className="prose muted">No native-title determination or registered claim intersects this point.</p>}
+      </div>
+
+      <div className="detail-section">
+        <div className="detail-section-title"><Database size={13} className="dst-icon" /> Exploration evidence (real)</div>
+        <div className="reg-list">
+          <Reg k="WAMEX reports ≤10 km" v={ctx.wamexReports != null ? fmtNum(ctx.wamexReports) : "—"} mono />
+          <Reg k="Drill collars ≤10 km" v={ctx.drillHolesNearby != null ? fmtNum(ctx.drillHolesNearby) : "—"} mono />
         </div>
+        <p className="prose faint" style={{ fontSize: "var(--fs-10)", marginTop: "var(--sp-2)" }}>
+          {ctx.source}
+        </p>
       </div>
     </>
   );
 }
 
-/* ---------- Score ---------- */
+/* ---------- Indicator ---------- */
 function ScoreTab({ t }: { t: Tenement }) {
   return (
     <div className="detail-section">
@@ -366,10 +361,10 @@ function ScoreTab({ t }: { t: Tenement }) {
         <RadialScore score={t.score} size={88} label="HAXAX" />
         <div>
           <div className="ai-verdict-label" style={{ fontSize: "var(--fs-14)" }}>
-            {t.score >= 85 ? "Top-decile opportunity" : t.score >= 60 ? "Mid-band — selective" : "Below acquisition threshold"}
+            {t.score >= 85 ? "Top-decile on the indicator" : t.score >= 60 ? "Mid-band — selective" : "Below screen threshold"}
           </div>
           <div className="muted" style={{ fontSize: "var(--fs-12)", marginTop: 4 }}>
-            Ranks <strong style={{ color: "var(--text-primary)" }}>P{t.scorePercentile}</strong> of {REGION_MAP[t.regionId].name}. Transparent weighted model — every factor reconciles to the headline.
+            Ranks <strong style={{ color: "var(--text-primary)" }}>P{t.scorePercentile}</strong> of {REGION_MAP[t.regionId].name}. A transparent weighted indicator computed from real inputs only — dates, endowment, drill density, holder. Not a valuation.
           </div>
         </div>
       </div>
@@ -378,71 +373,69 @@ function ScoreTab({ t }: { t: Tenement }) {
   );
 }
 
-/* ---------- Tenure (register) ---------- */
-function TenureTab({ t }: { t: Tenement }) {
+/* ---------- Register (real tenure fields only) ---------- */
+function TenureTab({ t, ctx }: { t: Tenement; ctx: RealContext | null }) {
   const r = t.register;
   const days = daysUntil(t.expiryDate);
-  const expiryColor = days < 0 ? "var(--score-low)" : days < 365 ? "var(--score-mid)" : "var(--text-primary)";
+  const realExpiry = hasRealExpiry(t);
+  const expiryColor = !realExpiry ? "var(--text-secondary)" : days < 0 ? "var(--score-low)" : days < 365 ? "var(--score-mid)" : "var(--text-primary)";
   return (
     <>
       <div className="detail-section">
-        <div className="detail-section-title"><ScrollText size={13} className="dst-icon" /> Tenure register</div>
+        <div className="detail-section-title"><ScrollText size={13} className="dst-icon" /> Tenure register (DMIRS)</div>
         <div className="reg-cols">
           <div className="reg-list">
             <Reg k="Tenement ID" v={t.id} mono />
             <Reg k="Licence type" v={t.licenceType} />
             <Reg k="Status" v={<StatusBadge status={t.status} />} />
-            <Reg k="Mineral field" v={r.mineralField} />
-            <Reg k="Local govt area" v={r.lga} />
-            <Reg k="1:250k sheet" v={r.mapSheet} mono />
+            <Reg k="Mineral field" v={ctx?.mineralField ? `${ctx.mineralField.field}` : "—"} />
+            <Reg k="Local govt area" v={ctx?.lga ?? "—"} />
             <Reg k="Datum / zone" v={r.datum} mono />
             <Reg k="Centroid" v={r.coords} mono />
           </div>
           <div className="reg-list">
             <Reg k="Area" v={`${fmtHa(t.areaHa)} · ${fmtKm2(t.areaHa)}`} mono />
             <Reg k="Graticular blocks" v={`${t.blocks} blocks`} mono />
-            <Reg k="Survey" v={r.survey} />
-            <Reg k="Applied" v={fmtDate(r.applicationDate)} mono />
+            <Reg k="Survey status" v={r.surveyStatus} />
             <Reg k="Granted" v={fmtDate(t.grantDate)} mono />
-            <Reg k="Expiry" v={<span style={{ color: expiryColor }}>{fmtDate(t.expiryDate)} ({expiryLabel(t.expiryDate)})</span>} mono />
-            <Reg k="Last dealing" v={`${r.lastDealing.type}`} />
-            <Reg k="Dealing date" v={fmtDate(r.lastDealing.date)} mono />
+            <Reg k="Term start" v={fmtDate(t.startDate)} mono />
+            <Reg k="Expiry" v={realExpiry ? <span style={{ color: expiryColor }}>{fmtDate(t.expiryDate)} ({expiryLabel(t.expiryDate)})</span> : <span className="faint">Not on register</span>} mono />
           </div>
         </div>
-      </div>
-
-      <div className="detail-section">
-        <div className="detail-section-title"><Receipt size={13} className="dst-icon" /> Rent & expenditure</div>
-        <div className="reg-cols">
-          <div className="reg-list">
-            <Reg k="Annual rent" v={`A$${fmtNum(r.rentPerYear)}`} mono />
-            <Reg k="Min. expenditure p.a." v={`A$${fmtNum(r.minExpenditure)}`} mono />
-          </div>
-          <div className="reg-list">
-            <Reg k="Expenditure to date" v={`A$${fmtNum(r.expenditureToDate)}`} mono />
-            <Reg k="Combined reporting" v={r.combinedReporting ? "Yes — group" : "No"} />
-          </div>
-        </div>
-      </div>
-
-      <div className="detail-section">
-        <div className="detail-section-title"><Gavel size={13} className="dst-icon" /> Title, native title & heritage</div>
-        <div className="reg-list">
-          <Reg k="Holder" v={`${t.holder} · ${t.holderType}`} />
-          <Reg k="Ownership" v={t.ownershipComplexity} />
-          <Reg k="Native title" v={r.nativeTitle} />
-          <Reg k="Heritage" v={r.heritage} />
-        </div>
-        {t.encumbrances.length > 0 && (
-          <div style={{ marginTop: "var(--sp-3)" }}>
-            <span className="eyebrow">Encumbrances</span>
-            <ul className="mt-2" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {t.encumbrances.map((e, i) => (
-                <li key={i} className="prose" style={{ display: "flex", gap: 6 }}><span className="faint">›</span> {e}</li>
-              ))}
-            </ul>
-          </div>
+        {t.specialInterest && (
+          <p className="prose" style={{ marginTop: "var(--sp-2)" }}><span className="eyebrow">Special interest:</span> {t.specialInterest}</p>
         )}
+      </div>
+
+      <div className="detail-section">
+        <div className="detail-section-title"><Building2 size={13} className="dst-icon" /> Holder(s)</div>
+        <div className="reg-list">
+          <Reg k="Primary holder" v={`${t.holder} · ${t.holderType}`} />
+          {t.holderAddress && <Reg k="Registered address" v={t.holderAddress} />}
+          <Reg k="Parties on title" v={`${t.holders.length} · ${t.ownershipComplexity}`} />
+        </div>
+        {t.holders.length > 1 && (
+          <ul className="mt-2" style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {t.holders.map((h, i) => (
+              <li key={i} className="prose" style={{ display: "flex", gap: 6 }}><span className="faint">{i + 1}.</span> {h}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="detail-section">
+        <div className="detail-section-title"><Gavel size={13} className="dst-icon" /> Native title & heritage</div>
+        {ctx ? (
+          ctx.nativeTitle ? (
+            <div className="reg-list">
+              <Reg k="Native title" v={`${ctx.nativeTitle.name} (${ctx.nativeTitle.status})`} />
+              {ctx.nativeTitle.reference && <Reg k="Reference" v={ctx.nativeTitle.reference} mono />}
+            </div>
+          ) : <p className="prose muted">No native-title determination or registered claim intersects this ground on the NNTT layer.</p>
+        ) : <p className="prose muted">Resolving native-title layer…</p>}
+        <p className="prose faint" style={{ fontSize: "var(--fs-10)", marginTop: "var(--sp-2)" }}>
+          Native title, geology and mineral field are pulled live from government layers — see the Context tab.
+        </p>
       </div>
     </>
   );

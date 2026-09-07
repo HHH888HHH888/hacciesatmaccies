@@ -29,7 +29,7 @@ const NAV: NavDef[] = [
   { to: "/deals", label: "Deal Flow", icon: Trello },
   { to: "/watchlist", label: "Watchlist", icon: Star },
   { to: "/alerts", label: "Alerts", icon: Bell, badge: true },
-  { to: "/comparables", label: "Comparables", icon: BarChart3 },
+  { to: "/comparables", label: "Peers", icon: BarChart3 },
   { to: "/memo", label: "IC Memo", icon: FileText },
   { to: "/data", label: "Data Health", icon: Activity },
 ];

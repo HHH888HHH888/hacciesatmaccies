@@ -49,19 +49,6 @@ const GEO_DOMAINS = REGIONS.map((r, i) => {
   };
 });
 
-function hashDots(t: Tenement, g: Geo): { x: number; y: number }[] {
-  const n = Math.max(0, Math.min(8, Math.round(t.drillHoles / 90)));
-  const out: { x: number; y: number }[] = [];
-  let seed = t.id.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-  for (let i = 0; i < n; i++) {
-    seed = (seed * 9301 + 49297) % 233280;
-    const a = (seed / 233280) * Math.PI * 2;
-    const r = 4 + ((seed % 13) || 3);
-    out.push({ x: g.cx + Math.cos(a) * r, y: g.cy + Math.sin(a) * r });
-  }
-  return out;
-}
-
 interface Props {
   tenements: Tenement[];
 }
@@ -358,12 +345,9 @@ export function WAMap({ tenements }: Props) {
               </circle>
             ))}
 
-          {/* drill holes — real DMIRS points where available, else synthesised */}
-          {layers.drillholes && (realDrill.length
-            ? realDrill.map((p, i) => <circle key={`dh${i}`} className="wa-drill" cx={p.x} cy={p.y} r={0.9} />)
-            : tenements.flatMap((t) =>
-                hashDots(t, geo[t.id]).map((d, i) => <circle key={`${t.id}-d${i}`} className="wa-drill" cx={d.x} cy={d.y} r={1.4} />),
-              ))}
+          {/* drill holes — real DMIRS drill collars only */}
+          {layers.drillholes &&
+            realDrill.map((p, i) => <circle key={`dh${i}`} className="wa-drill" cx={p.x} cy={p.y} r={0.9} />)}
 
           {/* tenements */}
           {layers.tenements &&
@@ -398,11 +382,6 @@ export function WAMap({ tenements }: Props) {
             tenements
               .filter((t) => daysUntil(t.expiryDate) < 365)
               .map((t) => <path key={`e${t.id}`} d={geo[t.id].d} fill="none" stroke="var(--score-mid)" strokeWidth={2} strokeDasharray="5 3" vectorEffect="non-scaling-stroke" />)}
-
-          {layers.royalty &&
-            tenements
-              .filter((t) => t.encumbrances.length > 0)
-              .map((t) => <path key={`r${t.id}`} d={geo[t.id].d} fill="url(#hatch)" stroke="none" />)}
 
           {layers.competitor &&
             tenements

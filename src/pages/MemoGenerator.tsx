@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, FileText, Sparkles } from "lucide-react";
 import { useStore } from "../lib/store";
 import { REGION_MAP } from "../lib/geo";
-import { fmtDate, fmtHa, fmtMoneyM, fmtPerHa } from "../lib/format";
-import { ActionBadge, CommodityTag, ScoreChip, Skeleton, commodityVar } from "../components/ui";
+import { fmtDate, fmtHa } from "../lib/format";
+import { ActionBadge, ScoreChip, Skeleton } from "../components/ui";
 import { bandColor } from "../lib/scoring";
 
 interface AiMemo {
@@ -15,7 +15,6 @@ interface AiMemo {
 export function MemoGenerator() {
   const selectedId = useStore((s) => s.selectedId);
   const select = useStore((s) => s.select);
-  const COMPS = useStore((s) => s.comps);
   const TENEMENTS = useStore((s) => s.tenements);
   const [q, setQ] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -51,9 +50,7 @@ export function MemoGenerator() {
     return TENEMENTS.filter((t) => !s || `${t.id} ${t.holder} ${t.commodities.join(" ")}`.toLowerCase().includes(s)).slice(0, 40);
   }, [q, TENEMENTS]);
 
-  const comps = COMPS.filter((c) => subject.comps.includes(c.id));
-  const meanEv = comps.reduce((a, c) => a + c.evPerHa, 0) / (comps.length || 1);
-  const impliedM = (meanEv * subject.areaHa) / 1_000_000;
+  const realExpiry = new Date(subject.expiryDate).getFullYear() > 1971;
   const recTone =
     subject.action === "Acquire" ? "var(--score-high)" : subject.action === "Avoid" ? "var(--score-low)" : "var(--score-mid)";
 
@@ -142,9 +139,9 @@ export function MemoGenerator() {
                     <MetaCell k="District" v={subject.district} />
                     <MetaCell k="Area" v={fmtHa(subject.areaHa)} />
                     <MetaCell k="Granted" v={fmtDate(subject.grantDate)} />
-                    <MetaCell k="Expiry" v={fmtDate(subject.expiryDate)} />
+                    <MetaCell k="Expiry" v={realExpiry ? fmtDate(subject.expiryDate) : "Not on register"} />
                     <MetaCell k="Ownership" v={subject.ownershipComplexity} />
-                    <MetaCell k="Haxax Score" v={`${subject.score}/100`} color={bandColor(subject.score)} />
+                    <MetaCell k="Haxax indicator" v={`${subject.score}/100`} color={bandColor(subject.score)} />
                     <MetaCell k="Confidence" v={`${subject.ai.confidence}%`} />
                   </div>
 
@@ -174,25 +171,26 @@ export function MemoGenerator() {
                   </div>
 
                   <div className="memo-section">
-                    <h3>4 · Geology snapshot</h3>
-                    <p>{aiMemo?.geology ?? `${subject.geologySummary} ${subject.historicalActivity}`}</p>
+                    <h3>4 · Endowment &amp; geology</h3>
+                    <p>{aiMemo?.geology ?? `${subject.endowment} recorded MINEDEX deposit${subject.endowment === 1 ? "" : "s"} lie within 25 km${subject.nearbyMines[0] ? ` (nearest ${subject.nearbyMines[0].name} at ${subject.nearbyMines[0].distanceKm} km)` : ""}, with ${subject.drillHolesNearby} DMIRS drill collars logged within 10 km. Bedrock geology and native-title status for this exact ground are resolved live from GSWA and NNTT layers in the detail panel.`}</p>
                   </div>
 
                   <div className="memo-section">
-                    <h3>5 · Nearby project context</h3>
-                    <ul>
-                      {subject.nearbyMines.map((m, i) => (
-                        <li key={i}>{m.name} ({m.commodity}) — {m.distanceKm} km, {m.status.toLowerCase()}</li>
-                      ))}
-                    </ul>
+                    <h3>5 · Nearby project context (MINEDEX)</h3>
+                    {subject.nearbyMines.length ? (
+                      <ul>
+                        {subject.nearbyMines.map((m, i) => (
+                          <li key={i}>{m.name} ({m.commodity}) — {m.distanceKm} km, {m.status.toLowerCase()}</li>
+                        ))}
+                      </ul>
+                    ) : <p>No MINEDEX deposit recorded within 120 km.</p>}
                   </div>
 
                   <div className="memo-section">
-                    <h3>6 · Suggested valuation range</h3>
+                    <h3>6 · Valuation note</h3>
                     <p>
                       {aiMemo?.valuation ? aiMemo.valuation + " " : ""}
-                      Benchmarking against {comps.length} comparable WA transactions at a mean of {fmtPerHa(meanEv)} implies an indicative value of{" "}
-                      <strong>A${(impliedM * 0.7).toFixed(1)}m – A${(impliedM * 1.3).toFixed(1)}m</strong> (mid-point {fmtMoneyM(impliedM)}). Range applies a ±30% band; not a formal valuation.
+                      The public DMIRS register carries <strong>no sale price, rent, royalty, resource or valuation</strong> for this tenement, so no dollar figure is stated here. What bears on value is the real endowment nearby ({subject.endowment} deposits ≤25 km), the {subject.drillHolesNearby} drill collars ≤10 km, the {fmtHa(subject.areaHa)} of ground, holder profile ({subject.holderType}){realExpiry ? ", and expiry timing" : ""}. A defensible valuation requires primary data — comparable transactions, a JORC resource and exploration results — not on the public record.
                     </p>
                   </div>
 

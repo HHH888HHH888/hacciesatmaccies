@@ -4,7 +4,7 @@ import { useStore } from "../lib/store";
 import { getTenement } from "../lib/store";
 import { downloadCsv, stamp } from "../lib/csv";
 import { REGION_MAP } from "../lib/geo";
-import { fmtHa, fmtMoneyM, fmtNum, expiryLabel, daysUntil, relTime } from "../lib/format";
+import { fmtHa, expiryLabel, daysUntil, relTime } from "../lib/format";
 import {
   ActionBadge,
   CommodityTag,
@@ -51,8 +51,8 @@ export function Watchlist() {
 
   const roll = useMemo(() => ({
     count: items.length,
-    ev: items.reduce((a, t) => a + t.econ.impliedEvMidM, 0),
-    hold: items.reduce((a, t) => a + t.econ.holdingCostPa, 0),
+    area: items.reduce((a, t) => a + t.areaHa, 0),
+    endow: items.reduce((a, t) => a + t.endowment, 0),
     avg: items.length ? Math.round(items.reduce((a, t) => a + t.score, 0) / items.length) : 0,
     acquire: items.filter((t) => t.score >= 85).length,
   }), [items]);
@@ -91,9 +91,9 @@ export function Watchlist() {
           <>
           <div className="grid-kpis" style={{ marginBottom: "var(--sp-4)" }}>
             <KpiTile label="Tracked" value={roll.count} sub={`${roll.acquire} acquire-grade`} />
-            <KpiTile label="Portfolio implied EV" value={fmtMoneyM(roll.ev)} accent="var(--accent)" sub="sum of mid-case" />
-            <KpiTile label="Holding cost p.a." value={`A$${fmtNum(roll.hold)}`} sub="rent + min. expenditure" />
-            <KpiTile label="Mean Haxax" value={roll.avg} sub="portfolio average" />
+            <KpiTile label="Total ground" value={fmtHa(roll.area)} accent="var(--accent)" sub="watchlisted area" />
+            <KpiTile label="Deposits ≤25km" value={roll.endow} sub="summed endowment" />
+            <KpiTile label="Mean indicator" value={roll.avg} sub="portfolio average" />
           </div>
           <div className="card-grid">
             {items.map((t) => {
