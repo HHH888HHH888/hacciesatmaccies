@@ -8,6 +8,8 @@ import {
   ExternalLink,
   FileText,
   Gavel,
+  Gem,
+  History,
   Layers,
   Locate,
   Mountain,
@@ -180,7 +182,7 @@ export function DetailDrawer() {
 
             <div className="detail-scroll">
               {tab === "brief" && <BriefTab t={t} aiNote={aiNote} neighbours={neighbours} />}
-              {tab === "context" && <ContextTab ctx={ctx} />}
+              {tab === "context" && <ContextTab ctx={ctx} t={t} />}
               {tab === "score" && <ScoreTab t={t} />}
               {tab === "tenure" && <TenureTab t={t} ctx={ctx} />}
               {tab === "activity" && (
@@ -232,6 +234,28 @@ function BriefTab({ t, aiNote, neighbours }: { t: Tenement; aiNote?: (AIOpinion 
       <div className="detail-section">
         <AIOpinionCard t={t} opinion={aiNote ?? undefined} provider={aiNote?.provider} />
       </div>
+      {t.commodityConfidence != null && t.commodityConfidence > 0 && (
+        <div className="detail-section">
+          <div className="detail-section-title"><Gem size={13} className="dst-icon" /> Commodity call · reliability</div>
+          <div className="row center gap-2" style={{ marginBottom: "var(--sp-2)" }}>
+            {t.commodities.map((c) => <CommodityTag key={c} c={c} />)}
+            <span className="mono t-strong" style={{ marginLeft: "auto", color: t.commodityConfidence >= 70 ? "var(--score-high)" : t.commodityConfidence >= 45 ? "var(--score-mid)" : "var(--score-low)" }}>
+              {t.commodityConfidence}% confidence
+            </span>
+          </div>
+          <div className="conf-bar"><div className="conf-fill" style={{ width: `${t.commodityConfidence}%`, background: t.commodityConfidence >= 70 ? "var(--score-high)" : t.commodityConfidence >= 45 ? "var(--score-mid)" : "var(--score-low)" }} /></div>
+          {t.commodityBreakdown && t.commodityBreakdown.length > 0 && (
+            <div className="row gap-2 wrap" style={{ marginTop: "var(--sp-2)" }}>
+              {t.commodityBreakdown.map((b) => (
+                <span key={b.commodity} className="acquirer-chip">{b.commodity} · {b.count} dep · nearest {b.nearestKm} km</span>
+              ))}
+            </div>
+          )}
+          <p className="prose faint" style={{ fontSize: "var(--fs-10)", marginTop: "var(--sp-2)" }}>
+            Inferred from real nearby MINEDEX deposits, weighted by distance. The Context tab shows what explorers actually targeted here (WAMEX).
+          </p>
+        </div>
+      )}
       <div className="detail-section">
         <div className="detail-section-title"><Mountain size={13} className="dst-icon" /> Nearby mines & deposits (MINEDEX)</div>
         {t.nearbyMines.length ? (
@@ -299,7 +323,7 @@ function BriefTab({ t, aiNote, neighbours }: { t: Tenement; aiNote?: (AIOpinion 
 }
 
 /* ---------- Context (real government layers, on-demand) ---------- */
-function ContextTab({ ctx }: { ctx: RealContext | null }) {
+function ContextTab({ ctx, t }: { ctx: RealContext | null; t: Tenement }) {
   if (!ctx) {
     return (
       <div className="detail-section">
@@ -351,10 +375,50 @@ function ContextTab({ ctx }: { ctx: RealContext | null }) {
           <Reg k="WAMEX reports ≤10 km" v={ctx.wamexReports != null ? fmtNum(ctx.wamexReports) : "—"} mono />
           <Reg k="Drill collars ≤10 km" v={ctx.drillHolesNearby != null ? fmtNum(ctx.drillHolesNearby) : "—"} mono />
         </div>
+        {ctx.wamexCommodities && ctx.wamexCommodities.length > 0 && (() => {
+          const prim = t.commodities[0];
+          const syn: Record<string, string[]> = {
+            Lithium: ["lithium", "spodumene"], "Rare Earths": ["rare earth", "ree"], "Iron Ore": ["iron"],
+            Gold: ["gold"], Nickel: ["nickel"], Copper: ["copper", "base metal"], Cobalt: ["cobalt"], Manganese: ["manganese"],
+          };
+          const terms = syn[prim] ?? [prim.toLowerCase()];
+          const corroborated = ctx.wamexCommodities.some((c) => terms.some((tm) => c.name.toLowerCase().includes(tm)));
+          return (
+            <>
+              <div className="eyebrow" style={{ marginTop: "var(--sp-3)", marginBottom: 6 }}>Commodities explorers targeted here (WAMEX)</div>
+              <div className="row gap-2 wrap">
+                {ctx.wamexCommodities.map((c) => <span key={c.name} className="acquirer-chip">{c.name} · {c.count}</span>)}
+              </div>
+              <p className="prose" style={{ marginTop: "var(--sp-2)", color: corroborated ? "var(--score-high)" : "var(--score-mid)", fontSize: "var(--fs-11)" }}>
+                {corroborated
+                  ? `✓ Corroborated — the ${prim} call matches what explorers have actually targeted on this ground.`
+                  : `⚠ Caution — WAMEX targets here differ from the inferred ${prim} call; verify the commodity before relying on it.`}
+              </p>
+            </>
+          );
+        })()}
         <p className="prose faint" style={{ fontSize: "var(--fs-10)", marginTop: "var(--sp-2)" }}>
           {ctx.source}
         </p>
       </div>
+
+      {ctx.wamexHistory && ctx.wamexHistory.length > 0 && (
+        <div className="detail-section">
+          <div className="detail-section-title"><History size={13} className="dst-icon" /> Exploration history (WAMEX)</div>
+          <div className="mini-list">
+            {ctx.wamexHistory.map((r) => (
+              <div className="mini-row" key={r.anumber} style={{ flexWrap: "wrap" }}>
+                <span className="mono t-strong" style={{ width: 42 }}>{r.year ?? "—"}</span>
+                <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontSize: "var(--fs-11)" }}>{r.title || r.operator}</span>
+                <span className="mr-meta">{r.commodity && r.commodity !== "—" ? r.commodity.split(/[;,]/)[0] : r.operator}</span>
+              </div>
+            ))}
+          </div>
+          <p className="prose faint" style={{ fontSize: "var(--fs-10)", marginTop: "var(--sp-2)" }}>
+            Open-file exploration reports (WAMEX · DMIRS-033) lodged on or near this ground — real history, with the commodity each campaign targeted.
+          </p>
+        </div>
+      )}
     </>
   );
 }

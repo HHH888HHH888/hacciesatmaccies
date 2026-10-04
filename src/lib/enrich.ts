@@ -179,8 +179,8 @@ export function enrichTenement(
   const dUntilY = (expiryMs - now) / YEAR;
   const expiryWord = !hasExpiry ? "—" : dUntilY < 0 ? "expired" : dUntilY < 1 ? `${Math.max(1, Math.round(dUntilY * 12))} months` : `${dUntilY.toFixed(1)} years`;
 
-  // ---- real nearby deposits (MINEDEX) → commodity + endowment ----
-  const near = deposits.length ? nearestDeposits(deposits, raw.lng, raw.lat, 5, 120) : [];
+  // ---- real nearby deposits (MINEDEX) → distance-weighted commodity + endowment ----
+  const near = deposits.length ? nearestDeposits(deposits, raw.lng, raw.lat, 10, 80) : [];
   const within25 = deposits.filter((d) => haversineKm(raw.lat, raw.lng, d.lat, d.lng) <= 25);
   const endowment = within25.length;
   const producingNear = within25.filter((d) => /Producing/i.test(d.stage)).length;
@@ -188,15 +188,32 @@ export function enrichTenement(
 
   let commodities: Commodity[];
   let nearbyMines: Tenement["nearbyMines"];
+  let commodityConfidence = 0;
+  let commodityBreakdown: { commodity: Commodity; count: number; nearestKm: number }[] = [];
   if (near.length) {
     nearbyMines = near.slice(0, 4).map((x) => ({ name: x.d.name, commodity: x.d.commodity, distanceKm: Math.round(x.km), status: x.d.stage }));
-    const counts: Record<string, number> = {};
-    near.forEach((x) => (counts[x.d.commodity] = (counts[x.d.commodity] ?? 0) + 1));
-    const ranked = Object.entries(counts).sort((a, z) => z[1] - a[1]).map((e) => e[0] as Commodity);
-    commodities = ranked.slice(0, 2);
+    // weight each commodity by inverse distance so the closest deposits drive the call
+    const weight: Record<string, number> = {};
+    const cnt: Record<string, number> = {};
+    const nearestByC: Record<string, number> = {};
+    for (const x of near) {
+      const c = x.d.commodity;
+      weight[c] = (weight[c] ?? 0) + 1 / (x.km + 2);
+      cnt[c] = (cnt[c] ?? 0) + 1;
+      nearestByC[c] = Math.min(nearestByC[c] ?? Infinity, x.km);
+    }
+    const ranked = Object.entries(weight).sort((a, z) => z[1] - a[1]);
+    const total = ranked.reduce((a, e) => a + e[1], 0) || 1;
+    commodities = ranked.slice(0, 2).map((e) => e[0] as Commodity);
+    const topShare = ranked[0][1] / total;
+    const nTop = nearestByC[ranked[0][0]];
+    const prox = nTop < 5 ? 1 : nTop < 15 ? 0.85 : nTop < 40 ? 0.62 : 0.42; // closer deposits = more reliable
+    commodityConfidence = Math.round(clamp(topShare * 100 * prox, 5, 98));
+    commodityBreakdown = ranked.slice(0, 4).map(([c]) => ({ commodity: c as Commodity, count: cnt[c], nearestKm: Math.round(nearestByC[c]) }));
   } else {
     commodities = [REGION_COMMODITIES[region]];
     nearbyMines = [];
+    commodityConfidence = 0;
   }
   const primary = commodities[0];
   const nearName = near[0]?.d.name ?? null;
@@ -313,7 +330,7 @@ export function enrichTenement(
     id: raw.id, licenceType, status, holder, holders, holderAddress: raw.holderAddress?.trim() || undefined, holderType,
     grantDate, startDate, expiryDate, areaHa, blocks, registeredArea, commodities, regionId: region,
     district: nearName ?? reg.name, lng: raw.lng, lat: raw.lat, poly: raw.poly,
-    nearbyMines, endowment, drillHolesNearby, surveyStatus: register.surveyStatus,
+    nearbyMines, endowment, drillHolesNearby, commodityConfidence, commodityBreakdown, surveyStatus: register.surveyStatus,
     specialInterest: raw.special?.trim() || undefined,
     riskFlags, score, factors, ai, action, timeline, ownershipComplexity, register,
     target, opportunity, scorePercentile: 0,

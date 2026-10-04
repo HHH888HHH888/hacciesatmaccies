@@ -124,6 +124,8 @@ export interface Tenement {
   blocks: number; // graticular blocks (derived from area)
   registeredArea?: string; // authoritative legal area as stated on the DMIRS register (e.g. "999.6 ha", "2 blocks")
   commodities: Commodity[]; // inferred from nearest MINEDEX deposit
+  commodityConfidence?: number; // 0-100 reliability of the commodity call (dominance × proximity of real deposits)
+  commodityBreakdown?: { commodity: Commodity; count: number; nearestKm: number }[]; // real nearby deposits by commodity
   regionId: RegionId;
   district: string;
   /** centroid */
@@ -162,6 +164,8 @@ export interface RealContext {
   mapSheet: string | null; // 1:250 000 geological map sheet
   wamexReports: number | null; // real WAMEX exploration reports within ~10 km
   drillHolesNearby: number | null; // real drill collars within ~10 km
+  wamexHistory?: { anumber: number; year: number | null; operator: string; commodity: string; title: string }[]; // real exploration reports on the ground
+  wamexCommodities?: { name: string; count: number }[]; // commodities explorers actually targeted here
   source: string; // attribution
   fetchedAt: string; // ISO
 }

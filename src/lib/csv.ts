@@ -15,6 +15,7 @@ const COLS: { h: string; v: (t: Tenement) => string | number }[] = [
   { h: "Region", v: (t) => REGION_MAP[t.regionId].name },
   { h: "Nearest deposit", v: (t) => t.nearbyMines[0]?.name ?? "" },
   { h: "Commodity (inferred)", v: (t) => t.commodities.join("; ") },
+  { h: "Commodity confidence %", v: (t) => t.commodityConfidence ?? "" },
   { h: "Area (ha)", v: (t) => Math.round(t.areaHa) },
   { h: "Granted", v: (t) => t.grantDate.slice(0, 10) },
   { h: "Expiry", v: (t) => (new Date(t.expiryDate).getFullYear() > 1971 ? t.expiryDate.slice(0, 10) : "") },

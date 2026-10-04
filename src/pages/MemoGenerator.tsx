@@ -161,6 +161,7 @@ export function MemoGenerator() {
                       <Par k="Tenement" v={subject.id} />
                       <Par k="Licence type" v={subject.licenceType} />
                       <Par k="Status" v={subject.status} />
+                      <Par k="Commodity (inferred)" v={`${subject.commodities.join(", ")}${subject.commodityConfidence ? ` · ${subject.commodityConfidence}% confidence` : ""}`} />
                       <Par k="Registered holder" v={`${subject.holder} (${subject.holderType})`} />
                       {subject.holders.length > 1 && <Par k="Co-holders" v={subject.holders.slice(1).join("; ")} />}
                       <Par k="Ownership" v={subject.ownershipComplexity} />

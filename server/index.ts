@@ -159,6 +159,44 @@ async function arcgisCount(url: string, lng: number, lat: number, deg = 0.09): P
   } catch { return null; } finally { clearTimeout(to); }
 }
 
+/** Real WAMEX exploration-report history + the commodities explorers targeted on this ground. */
+async function fetchWamex(lng: number, lat: number, deg = 0.07): Promise<{ history: any[]; commodities: { name: string; count: number }[] }> {
+  const params = new URLSearchParams({
+    geometry: `${lng - deg},${lat - deg},${lng + deg},${lat + deg}`, geometryType: "esriGeometryEnvelope",
+    inSR: "4326", spatialRel: "esriSpatialRelIntersects",
+    outFields: "anumber,title,report_year,operator,author_company,target_commodity",
+    orderByFields: "report_year DESC", resultRecordCount: "40", returnGeometry: "false", f: "json",
+  });
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 20000);
+  try {
+    const res = await fetch(`${L_WAMEX}?${params.toString()}`, { signal: ctrl.signal, headers: { "User-Agent": "Haxax/1.0" } });
+    if (!res.ok) return { history: [], commodities: [] };
+    const j: any = await res.json();
+    const feats: any[] = j.features ?? [];
+    const history = feats.map((f) => {
+      const a = f.attributes ?? {};
+      return {
+        anumber: a.anumber ?? 0,
+        year: typeof a.report_year === "number" ? a.report_year : null,
+        operator: titleCaseLite(String(a.operator || a.author_company || "").trim()) || "—",
+        commodity: String(a.target_commodity || "").replace(/NO TARGET COMMODITY/i, "—").trim(),
+        title: String(a.title || "").trim(),
+      };
+    }).sort((a, b) => (b.year ?? -1) - (a.year ?? -1)).slice(0, 8); // most recent dated reports first
+    const tally: Record<string, number> = {};
+    for (const f of feats) {
+      for (const part of String(f.attributes?.target_commodity || "").split(/[;,]/).map((s) => s.trim()).filter(Boolean)) {
+        if (/NO TARGET/i.test(part)) continue;
+        const key = part.toLowerCase().replace(/\b\w/g, (m) => m.toUpperCase());
+        tally[key] = (tally[key] ?? 0) + 1;
+      }
+    }
+    const commodities = Object.entries(tally).sort((a, z) => z[1] - a[1]).slice(0, 8).map(([name, count]) => ({ name, count }));
+    return { history, commodities };
+  } catch { return { history: [], commodities: [] }; } finally { clearTimeout(to); }
+}
+
 /** Parse one GeoJSON feature from SLIP into a normalised RawTenement. */
 function parseFeature(f: any): RawTenement | null {
   const p = f?.properties ?? {};
@@ -636,7 +674,7 @@ const server = http.createServer(async (req, res) => {
     const lng = Number(url.searchParams.get("lng"));
     const lat = Number(url.searchParams.get("lat"));
     if (!isFinite(lng) || !isFinite(lat)) { send(res, 400, { error: "lng & lat required" }); return; }
-    const [geo, mf, lga, ntDet, ntClaim, wamex, drills, sheet] = await Promise.all([
+    const [geo, mf, lga, ntDet, ntClaim, wamex, drills, sheet, wamexData] = await Promise.all([
       arcgisPointAttrs(L_GEOLOGY, lng, lat, "unitname,code,descriptn"),
       arcgisPointAttrs(L_MINFIELD, lng, lat, "mfield,mdistrict,number_"),
       arcgisPointAttrs(L_LGA, lng, lat, "name"),
@@ -645,6 +683,7 @@ const server = http.createServer(async (req, res) => {
       arcgisCount(L_WAMEX, lng, lat),
       arcgisCount(DRILLHOLES, lng, lat),
       arcgisPointAttrs(L_MAPSHEET, lng, lat, "*"),
+      fetchWamex(lng, lat),
     ]);
     const geology = geo && geo.unitname ? { unit: String(geo.unitname).trim(), code: String(geo.code ?? "").trim(), description: String(geo.descriptn ?? "").trim() } : null;
     const mineralField = mf && mf.mfield ? { field: String(mf.mfield).trim(), district: String(mf.mdistrict ?? "").trim(), number: String(mf.number_ ?? "").trim() } : null;
@@ -660,6 +699,7 @@ const server = http.createServer(async (req, res) => {
       geology, mineralField, lga: lgaName, nativeTitle,
       mapSheet: sheetName ? String(sheetName).trim() : null,
       wamexReports: wamex, drillHolesNearby: drills,
+      wamexHistory: wamexData.history, wamexCommodities: wamexData.commodities,
       source: "DMIRS / GSWA / Landgate / NNTT — SLIP public services",
       fetchedAt: new Date().toISOString(),
     });
