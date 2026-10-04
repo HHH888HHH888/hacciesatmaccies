@@ -5,6 +5,7 @@ import {
   CalendarClock,
   Crosshair,
   Database,
+  ExternalLink,
   FileText,
   Gavel,
   Layers,
@@ -52,6 +53,11 @@ const actionColor = (a: SuggestedAction) =>
   a === "Acquire" ? "var(--score-high)" : a === "Investigate" ? "var(--info)" : a === "Monitor" ? "var(--score-mid)" : "var(--score-low)";
 
 const hasRealExpiry = (t: Tenement) => new Date(t.expiryDate).getFullYear() > 1971;
+
+/* official DMIRS sources — both verified working, public, no login */
+const TENGRAPH_URL = "https://tgw.dmp.wa.gov.au/tgw/";
+const dmirsRecordUrl = (id: string) =>
+  `https://services.slip.wa.gov.au/public/rest/services/SLIP_Public_Services/Industry_and_Mining/MapServer/3/query?where=fmt_tenid%3D%27${encodeURIComponent(id)}%27&outFields=*&returnGeometry=false&f=html`;
 
 export function DetailDrawer() {
   const selectedId = useStore((s) => s.selectedId);
@@ -382,6 +388,17 @@ function TenureTab({ t, ctx }: { t: Tenement; ctx: RealContext | null }) {
   return (
     <>
       <div className="detail-section">
+        <div className="detail-section-title"><ExternalLink size={13} className="dst-icon" /> Verify on the official record</div>
+        <div className="row gap-2 wrap">
+          <a className="btn btn--sm" href={TENGRAPH_URL} target="_blank" rel="noreferrer">TENGRAPH Web ↗</a>
+          <a className="btn btn--sm" href={dmirsRecordUrl(t.id)} target="_blank" rel="noreferrer">DMIRS record · {t.id} ↗</a>
+        </div>
+        <p className="prose faint" style={{ fontSize: "var(--fs-10)", marginTop: "var(--sp-2)" }}>
+          TENGRAPH Web is the authoritative DMIRS map — search {t.id} there. The record link opens the live register entry for this exact tenement. Always verify here before transacting.
+        </p>
+      </div>
+
+      <div className="detail-section">
         <div className="detail-section-title"><ScrollText size={13} className="dst-icon" /> Tenure register (DMIRS)</div>
         <div className="reg-cols">
           <div className="reg-list">
@@ -394,7 +411,8 @@ function TenureTab({ t, ctx }: { t: Tenement; ctx: RealContext | null }) {
             <Reg k="Centroid" v={r.coords} mono />
           </div>
           <div className="reg-list">
-            <Reg k="Area" v={`${fmtHa(t.areaHa)} · ${fmtKm2(t.areaHa)}`} mono />
+            <Reg k="Area (register)" v={t.registeredArea ?? "—"} mono />
+            <Reg k="Area (mapped)" v={`${fmtHa(t.areaHa)} · ${fmtKm2(t.areaHa)}`} mono />
             <Reg k="Graticular blocks" v={`${t.blocks} blocks`} mono />
             <Reg k="Survey status" v={r.surveyStatus} />
             <Reg k="Granted" v={fmtDate(t.grantDate)} mono />

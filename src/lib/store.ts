@@ -34,6 +34,7 @@ export interface DataPayload {
   live?: boolean;
   generatedAt?: string;
   regions?: number;
+  registerTotal?: number;
 }
 
 export type Theme = "dark" | "light";
@@ -87,6 +88,7 @@ interface Store {
   dataSource: string;
   dataGeneratedAt: string | null;
   dataRegions: number;
+  dataRegisterTotal: number;
   setData: (p: DataPayload, status: "live" | "mock") => void;
   setDataStatus: (s: DataStatus) => void;
   addTenement: (t: Tenement) => void;
@@ -176,6 +178,7 @@ export const useStore = create<Store>()(
       dataSource: "Connecting to WA register…",
       dataGeneratedAt: null,
       dataRegions: 0,
+      dataRegisterTotal: 0,
       setDataStatus: (s) => set({ dataStatus: s }),
       addTenement: (t) =>
         set((s) => (s.tenements.some((x) => x.id === t.id) ? {} : { tenements: [t, ...s.tenements] })),
@@ -190,7 +193,7 @@ export const useStore = create<Store>()(
             tenements: p.tenements, deposits: p.deposits ?? [], drillPoints: p.drillPoints ?? [], alerts: p.alerts, feed: p.feed, stats: p.stats,
             watchlist, deals, dataStatus: status,
             dataSource: p.source ?? (status === "live" ? "Live WA register" : "Offline cache"),
-            dataGeneratedAt: p.generatedAt ?? null, dataRegions: p.regions ?? 0,
+            dataGeneratedAt: p.generatedAt ?? null, dataRegions: p.regions ?? 0, dataRegisterTotal: p.registerTotal ?? 0,
             lastSync: Date.now(),
           };
         }),

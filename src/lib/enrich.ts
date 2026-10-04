@@ -48,6 +48,8 @@ export interface RawTenement {
   holderAddress?: string;
   survStatus?: string;
   special?: string;
+  legalArea?: number;      // authoritative area value from the register
+  legalAreaUnit?: string;  // its unit (HA., BL., KM2 …)
   grantDate: number | null;
   startDate: number | null;
   endDate: number | null;
@@ -155,7 +157,15 @@ export function enrichTenement(
   const holderType = inferHolderType(raw.holders[0] ?? "", holderCount);
 
   const areaHa = Math.max(1, Math.round(raw.areaHa || 0));
-  const blocks = Math.max(1, Math.round(areaHa / 280)); // graticular blocks ≈ area / ~2.8 km²
+  let blocks = Math.max(1, Math.round(areaHa / 280)); // graticular blocks ≈ area / ~2.8 km²
+  // authoritative area exactly as stated on the DMIRS register
+  let registeredArea: string | undefined;
+  if (raw.legalArea != null && isFinite(raw.legalArea) && raw.legalArea > 0) {
+    const u = (raw.legalAreaUnit || "").toUpperCase();
+    if (u.includes("BL")) { registeredArea = `${raw.legalArea} block${raw.legalArea === 1 ? "" : "s"}`; blocks = Math.max(1, Math.round(raw.legalArea)); }
+    else if (u.includes("KM")) registeredArea = `${raw.legalArea} km²`;
+    else registeredArea = `${raw.legalArea} ha`;
+  }
 
   // real dates (fall back to null-safe values only for display maths)
   const grantMs = raw.grantDate ?? raw.startDate ?? now;
@@ -301,7 +311,7 @@ export function enrichTenement(
 
   return {
     id: raw.id, licenceType, status, holder, holders, holderAddress: raw.holderAddress?.trim() || undefined, holderType,
-    grantDate, startDate, expiryDate, areaHa, blocks, commodities, regionId: region,
+    grantDate, startDate, expiryDate, areaHa, blocks, registeredArea, commodities, regionId: region,
     district: nearName ?? reg.name, lng: raw.lng, lat: raw.lat, poly: raw.poly,
     nearbyMines, endowment, drillHolesNearby, surveyStatus: register.surveyStatus,
     specialInterest: raw.special?.trim() || undefined,

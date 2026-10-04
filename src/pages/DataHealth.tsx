@@ -1,29 +1,15 @@
 import type React from "react";
 import { useState } from "react";
-import { Activity, CheckCircle2, Database, RefreshCw, Server, Zap } from "lucide-react";
+import { Activity, Database, ExternalLink, RefreshCw, Server, ShieldCheck } from "lucide-react";
 import { bootstrapData, useStore } from "../lib/store";
 import { fmtNum, relTime } from "../lib/format";
 import { useTick } from "../lib/hooks";
 import { KpiTile } from "../components/ui";
 
-const SOURCES = [
-  { name: "TENGRAPH", desc: "Tenement boundaries & status", coverage: 99, status: "Healthy", records: 41922, lagMin: 12 },
-  { name: "MINEDEX", desc: "Mines, deposits & resources", coverage: 96, status: "Healthy", records: 8841, lagMin: 38 },
-  { name: "GeoVIEW.WA", desc: "Geoscience & geophysics layers", coverage: 92, status: "Healthy", records: 15203, lagMin: 64 },
-  { name: "WAMEX", desc: "Open-file exploration reports", coverage: 88, status: "Degraded", records: 30418, lagMin: 220 },
-  { name: "DMIRS Register", desc: "Holders, transfers & dealings", coverage: 97, status: "Healthy", records: 12677, lagMin: 26 },
-  { name: "Native Title (NNTT)", desc: "Claims & determinations", coverage: 90, status: "Healthy", records: 642, lagMin: 180 },
-];
+const TENGRAPH_URL = "https://tgw.dmp.wa.gov.au/tgw/";
 
-const PIPELINE = [
-  { label: "Ingest", ok: true },
-  { label: "Normalise", ok: true },
-  { label: "Geocode", ok: true },
-  { label: "Score", ok: true },
-  { label: "Alert engine", ok: true },
-];
-
-const statusColor = (s: string) => (s === "Healthy" ? "var(--score-high)" : s === "Degraded" ? "var(--score-mid)" : "var(--score-low)");
+const PIPELINE = ["Fetch (DMIRS/SLIP)", "Normalise", "Enrich & score", "Change-detect", "Serve"];
+const statusColor = (ok: boolean) => (ok ? "var(--score-high)" : "var(--score-low)");
 
 export function DataHealth() {
   const lastSync = useStore((s) => s.lastSync);
@@ -33,16 +19,28 @@ export function DataHealth() {
   const dataSource = useStore((s) => s.dataSource);
   const generatedAt = useStore((s) => s.dataGeneratedAt);
   const regions = useStore((s) => s.dataRegions);
+  const registerTotal = useStore((s) => s.dataRegisterTotal);
   const [syncing, setSyncing] = useState(false);
   useTick(15000);
 
   const live = dataStatus === "live";
   const sync = async () => { setSyncing(true); await bootstrapData(); bumpSync(); setSyncing(false); };
+  const pct = registerTotal ? Math.max(1, Math.round((stats.tenements / registerTotal) * 100)) : 0;
 
-  // primary feed reflects real connection state
-  const sources = [
-    { name: "DMIRS / SLIP", desc: "Live mining tenements (DMIRS-003)", coverage: live ? 99 : 0, status: live ? "Healthy" : "Offline", records: stats.tenements, lagMin: 0 },
-    ...SOURCES,
+  // bulk sources — real counts actually loaded into the app
+  const bulk = [
+    { name: "DMIRS Mining Tenements", code: "DMIRS-003", records: stats.tenements, note: registerTotal ? `loaded of ${fmtNum(registerTotal)} live/pending` : "live records loaded" },
+    { name: "MINEDEX deposits", code: "DMIRS-001", records: stats.deposits, note: "mines & prospects loaded" },
+    { name: "DMIRS drill collars", code: "DMIRS-004", records: stats.drillHoles, note: "collar points loaded" },
+  ];
+  // context layers — queried live, per tenement, on demand
+  const onDemand = [
+    { name: "GSWA interpreted geology", code: "DMIRS-016", desc: "Bedrock unit at the point" },
+    { name: "DMIRS mineral fields", code: "DMIRS-005", desc: "Mineral field & district" },
+    { name: "Landgate LGA boundaries", code: "LGATE-233", desc: "Local government area" },
+    { name: "Native Title (NNTT / Fed Court)", code: "LGATE-066/004", desc: "Determinations & claims" },
+    { name: "WAMEX exploration reports", code: "DMIRS-033", desc: "Report density near the ground" },
+    { name: "Adjacent tenements", code: "DMIRS-003", desc: "Neighbours within ~25 km" },
   ];
 
   return (
@@ -53,7 +51,7 @@ export function DataHealth() {
           <div className="sub">
             {dataSource} · {live ? `${regions}/10 regions` : "cached"} · last sync {relTime(new Date(lastSync).toISOString())} ·{" "}
             <span style={{ color: live ? "var(--score-high)" : "var(--score-mid)" }}>{live ? "live feed operational" : "register unreachable — using cached snapshot"}</span>
-            {generatedAt && <span className="faint"> · register snapshot {relTime(generatedAt)}</span>}
+            {generatedAt && <span className="faint"> · snapshot {relTime(generatedAt)}</span>}
           </div>
         </div>
         <div className="page-head-actions">
@@ -62,70 +60,105 @@ export function DataHealth() {
       </div>
 
       <div className="page-body">
-        {/* record counts */}
+        {/* real record counts */}
         <div className="grid-kpis" style={{ marginBottom: "var(--sp-4)" }}>
-          <KpiTile label="Tenements" value={fmtNum(stats.tenements)} sub="active records" />
-          <KpiTile label="Deposits" value={fmtNum(stats.deposits)} sub="mines & prospects" />
-          <KpiTile label="Drill holes" value={fmtNum(stats.drillHoles)} sub="historic + recent" />
-          <KpiTile label="Historical events" value={fmtNum(stats.events)} sub="timeline records" />
-          <KpiTile label="Ground covered" value={fmtNum(Math.round(stats.totalAreaHa))} sub="hectares (real geometry)" />
-          <KpiTile label="Alerts emitted" value={fmtNum(stats.alerts)} sub="rolling 10 days" />
+          <KpiTile label="Full WA register" value={registerTotal ? fmtNum(registerTotal) : "—"} accent="var(--accent)" sub="live / pending (real total)" />
+          <KpiTile label="Loaded here" value={fmtNum(stats.tenements)} sub={registerTotal ? `${pct}% · any ID searchable` : "live sample"} />
+          <KpiTile label="Deposits" value={fmtNum(stats.deposits)} sub="MINEDEX, loaded" />
+          <KpiTile label="Drill collars" value={fmtNum(stats.drillHoles)} sub="DMIRS, loaded" />
+          <KpiTile label="Ground covered" value={fmtNum(Math.round(stats.totalAreaHa))} sub="hectares (loaded set)" />
+          <KpiTile label="Alerts" value={fmtNum(stats.alerts)} sub="from real register facts" />
+        </div>
+
+        {/* honest provenance banner */}
+        <div className="card" style={{ marginBottom: "var(--sp-4)", borderColor: "var(--accent-line)" }}>
+          <div className="card-body">
+            <div className="row center gap-2" style={{ marginBottom: "var(--sp-2)" }}>
+              <ShieldCheck size={16} style={{ color: "var(--accent)" }} />
+              <span className="t-strong" style={{ fontSize: "var(--fs-14)" }}>Coverage &amp; provenance</span>
+            </div>
+            <p className="prose" style={{ marginBottom: "var(--sp-2)" }}>
+              Haxax loads a representative <strong>{fmtNum(stats.tenements)}</strong> of the{" "}
+              <strong>{registerTotal ? fmtNum(registerTotal) : "~30,000+"}</strong> live/pending WA tenements for the map and
+              lists; <strong>any</strong> tenement is reachable live by ID from the search bar. Statutory and geological
+              context (geology, mineral field, LGA, native title, WAMEX) is queried live from government services per
+              tenement, when you open it.
+            </p>
+            <p className="prose faint" style={{ fontSize: "var(--fs-11)" }}>
+              Data is a public DMIRS/SLIP feed cached ~30 min — a research tool, not the authoritative register, and not a
+              valuation. Verify every target on the official record before transacting.
+            </p>
+            <div className="row gap-2 wrap" style={{ marginTop: "var(--sp-3)" }}>
+              <a className="btn btn--sm" href={TENGRAPH_URL} target="_blank" rel="noreferrer"><ExternalLink size={13} /> TENGRAPH Web (official)</a>
+            </div>
+          </div>
         </div>
 
         {/* pipeline */}
         <div className="card" style={{ marginBottom: "var(--sp-4)" }}>
           <div className="card-head">
-            <span className="card-title"><span className="ct-icon"><Server size={15} /></span> Ingestion pipeline</span>
-            <span className="source-status"><span className="ss-dot" style={{ background: "var(--score-high)" }} /> Operational</span>
+            <span className="card-title"><span className="ct-icon"><Server size={15} /></span> Refresh pipeline</span>
+            <span className="source-status"><span className="ss-dot" style={{ background: statusColor(live) }} /> {live ? "Operational" : "Degraded"}</span>
           </div>
           <div className="card-body">
             <div className="pipeline">
               {PIPELINE.map((p, i) => (
-                <div className="pipe-stage" key={p.label}>
-                  <div className="pipe-node">
-                    <span className="pn-dot" style={{ background: statusColor(p.ok ? "Healthy" : "Down") }} />
-                    {p.label}
-                  </div>
+                <div className="pipe-stage" key={p}>
+                  <div className="pipe-node"><span className="pn-dot" style={{ background: statusColor(live) }} />{p}</div>
                   {i < PIPELINE.length - 1 && <span className="pipe-arrow">→</span>}
                 </div>
               ))}
             </div>
             <div className="row gap-4 wrap" style={{ marginTop: "var(--sp-4)" }}>
-              <Metric icon={<Zap size={14} />} label="Scoring throughput" value="1,240 tenements/min" />
-              <Metric icon={<Activity size={14} />} label="Alert engine" value="Live · 6 rules armed" />
-              <Metric icon={<Database size={14} />} label="Store" value="In-memory + PostGIS-ready" />
-              <Metric icon={<CheckCircle2 size={14} />} label="Last full reindex" value={relTime(new Date(lastSync - 3600_000).toISOString())} />
+              <Metric icon={<RefreshCw size={14} />} label="Refresh cadence" value="Every 30 minutes" />
+              <Metric icon={<Activity size={14} />} label="Live lookup" value="Any tenement by ID" />
+              <Metric icon={<Database size={14} />} label="Store" value="In-memory cache" />
+              <Metric icon={<RefreshCw size={14} />} label="Last refresh" value={generatedAt ? relTime(generatedAt) : "—"} />
             </div>
           </div>
         </div>
 
-        {/* sources */}
+        {/* bulk sources — real */}
         <div className="sb-section-head" style={{ padding: "0 2px var(--sp-2)", border: 0 }}>
-          <span className="eyebrow">Source coverage · {sources.length} feeds</span>
+          <span className="eyebrow">Bulk feeds · loaded into the app</span>
         </div>
-        <div className="health-grid">
-          {sources.map((s) => (
+        <div className="health-grid" style={{ marginBottom: "var(--sp-4)" }}>
+          {bulk.map((s) => (
             <div className="source-tile" key={s.name}>
               <div className="source-head">
                 <div>
                   <div style={{ fontWeight: 700, fontSize: "var(--fs-14)" }}>{s.name}</div>
-                  <div className="muted" style={{ fontSize: "var(--fs-11)" }}>{s.desc}</div>
+                  <div className="muted" style={{ fontSize: "var(--fs-11)" }}>{s.code}</div>
                 </div>
-                <span className="source-status" style={{ color: statusColor(s.status) }}>
-                  <span className="ss-dot" style={{ background: statusColor(s.status) }} /> {s.status}
+                <span className="source-status" style={{ color: statusColor(live) }}>
+                  <span className="ss-dot" style={{ background: statusColor(live) }} /> {live ? "Live" : "Cached"}
                 </span>
               </div>
-              <div className="row between" style={{ fontSize: "var(--fs-11)" }}>
-                <span className="muted">Coverage</span>
-                <span className="mono t-strong" style={{ color: "var(--text-primary)" }}>{s.coverage}%</span>
+              <div className="row between" style={{ marginTop: "var(--sp-2)", fontSize: "var(--fs-13)" }}>
+                <span className="mono t-strong" style={{ color: "var(--text-primary)", fontSize: "var(--fs-18)" }}>{fmtNum(s.records)}</span>
+                <span className="faint" style={{ fontSize: "var(--fs-11)", textAlign: "right", maxWidth: 160 }}>{s.note}</span>
               </div>
-              <div className="health-bar">
-                <div className="health-bar-fill" style={{ width: `${s.coverage}%`, background: statusColor(s.status) }} />
+            </div>
+          ))}
+        </div>
+
+        {/* on-demand sources — real, per tenement */}
+        <div className="sb-section-head" style={{ padding: "0 2px var(--sp-2)", border: 0 }}>
+          <span className="eyebrow">Context layers · queried live, per tenement</span>
+        </div>
+        <div className="health-grid">
+          {onDemand.map((s) => (
+            <div className="source-tile" key={s.name}>
+              <div className="source-head">
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: "var(--fs-13)" }}>{s.name}</div>
+                  <div className="muted" style={{ fontSize: "var(--fs-11)" }}>{s.desc}</div>
+                </div>
+                <span className="source-status" style={{ color: "var(--accent)" }}>
+                  <span className="ss-dot" style={{ background: "var(--accent)" }} /> On-demand
+                </span>
               </div>
-              <div className="row between" style={{ marginTop: "var(--sp-3)", fontSize: "var(--fs-11)" }}>
-                <span className="muted">{fmtNum(s.records)} records</span>
-                <span className="faint mono">sync {s.lagMin}m ago</span>
-              </div>
+              <div className="faint mono" style={{ marginTop: "var(--sp-2)", fontSize: "var(--fs-10)" }}>{s.code}</div>
             </div>
           ))}
         </div>

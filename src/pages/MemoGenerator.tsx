@@ -164,7 +164,7 @@ export function MemoGenerator() {
                       <Par k="Registered holder" v={`${subject.holder} (${subject.holderType})`} />
                       {subject.holders.length > 1 && <Par k="Co-holders" v={subject.holders.slice(1).join("; ")} />}
                       <Par k="Ownership" v={subject.ownershipComplexity} />
-                      <Par k="Area" v={`${fmtHa(subject.areaHa)} · ${subject.blocks} graticular blocks`} />
+                      <Par k="Area" v={subject.registeredArea ? `${subject.registeredArea} (register) · ${fmtHa(subject.areaHa)} mapped` : `${fmtHa(subject.areaHa)} · ${subject.blocks} graticular blocks`} />
                       <Par k="Granted" v={longDate(new Date(subject.grantDate))} />
                       <Par k="Expiry" v={realExpiry ? longDate(new Date(subject.expiryDate)) : "Not stated on register"} />
                       <Par k="Survey status" v={subject.surveyStatus} />
@@ -240,7 +240,8 @@ export function MemoGenerator() {
                 <div className="memo-disclaimer">
                   This memorandum is a decision-support document for internal use only. It is not a valuation, appraisal,
                   financial product or advice, and it is not an offer or recommendation to deal in any tenement or security.
-                  Verify all particulars against the official DMIRS register before relying on them.
+                  Verify all particulars against the official DMIRS register — TENGRAPH Web (tgw.dmp.wa.gov.au) — before
+                  relying on them.
                 </div>
 
                 <footer className="memo-docfoot">

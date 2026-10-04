@@ -122,6 +122,7 @@ export interface Tenement {
   expiryDate: string; // ISO — real
   areaHa: number; // from real polygon geometry
   blocks: number; // graticular blocks (derived from area)
+  registeredArea?: string; // authoritative legal area as stated on the DMIRS register (e.g. "999.6 ha", "2 blocks")
   commodities: Commodity[]; // inferred from nearest MINEDEX deposit
   regionId: RegionId;
   district: string;

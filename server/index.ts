@@ -62,7 +62,7 @@ const OUT_FIELDS = "fmt_tenid,type,tenstatus,survstatus,special_in,holder1,holde
 
 type Payload = ReturnType<typeof enrichAll>;
 interface Cache {
-  data: (Payload & { source: string; live: boolean; generatedAt: string; regions: number; drillPoints: { lng: number; lat: number }[] }) | null;
+  data: (Payload & { source: string; live: boolean; generatedAt: string; regions: number; drillPoints: { lng: number; lat: number }[]; registerTotal: number }) | null;
   fetchedAt: number;
   refreshing: boolean;
   lastError: string | null;
@@ -177,6 +177,8 @@ function parseFeature(f: any): RawTenement | null {
     holderAddress: p.addr1 ? titleCaseLite(String(p.addr1).trim()) : undefined,
     survStatus: p.survstatus ? String(p.survstatus).trim() : undefined,
     special: p.special_in ? String(p.special_in).trim() : undefined,
+    legalArea: typeof p.legal_area === "number" ? p.legal_area : undefined,
+    legalAreaUnit: p.unit_of_me ? String(p.unit_of_me).trim() : undefined,
     grantDate: typeof p.grantdate === "number" ? p.grantdate : null,
     startDate: typeof p.startdate === "number" ? p.startdate : null,
     endDate: typeof p.enddate === "number" ? p.enddate : null,
@@ -237,11 +239,11 @@ async function queryBbox(bounds: [number, number, number, number], where: string
 /* ---------- fetch one region (mix of exploration + leases) ---------- */
 async function fetchRegion(bounds: [number, number, number, number]): Promise<RawTenement[]> {
   const [expl, leases] = await Promise.all([
-    queryBbox(bounds, `${BASE_WHERE} AND type LIKE '%EXPLORATION%'`, 90),
+    queryBbox(bounds, `${BASE_WHERE} AND type LIKE '%EXPLORATION%'`, 200),
     // investable non-exploration: prospecting, mining/mineral leases, retention
-    queryBbox(bounds, `${BASE_WHERE} AND (type LIKE '%PROSPECTING%' OR type LIKE '%MINING LEASE%' OR type LIKE '%MINERAL LEASE%' OR type LIKE '%RETENTION%')`, 90),
+    queryBbox(bounds, `${BASE_WHERE} AND (type LIKE '%PROSPECTING%' OR type LIKE '%MINING LEASE%' OR type LIKE '%MINERAL LEASE%' OR type LIKE '%RETENTION%')`, 200),
   ]);
-  const merged = [...stratify(expl, 16), ...stratify(leases, 12)];
+  const merged = [...stratify(expl, 48), ...stratify(leases, 34)];
   const seen = new Set<string>();
   const out: RawTenement[] = [];
   for (const t of merged) if (!seen.has(t.id)) { seen.add(t.id); out.push(t); }
@@ -312,6 +314,19 @@ async function fetchAllDrillHoles(): Promise<{ lng: number; lat: number }[]> {
   return out;
 }
 
+/** Live count of the complete WA register (live/pending, excl coal/petroleum) — the real denominator. */
+async function fetchRegisterTotal(): Promise<number> {
+  const params = new URLSearchParams({ where: BASE_WHERE, returnCountOnly: "true", f: "json" });
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 20000);
+  try {
+    const res = await fetch(`${SLIP}?${params.toString()}`, { signal: ctrl.signal, headers: { "User-Agent": "Haxax/1.0" } });
+    if (!res.ok) return 0;
+    const j: any = await res.json();
+    return typeof j.count === "number" ? j.count : 0;
+  } catch { return 0; } finally { clearTimeout(to); }
+}
+
 async function fetchAllDeposits(): Promise<Deposit[]> {
   const results = await Promise.allSettled(REGIONS.map((r) => fetchDeposits(r.bounds)));
   const seen = new Set<string>();
@@ -367,10 +382,11 @@ async function refresh(): Promise<void> {
   cache.refreshing = true;
   const started = Date.now();
   try {
-    const [results, deposits, drillPoints] = await Promise.all([
+    const [results, deposits, drillPoints, registerTotal] = await Promise.all([
       Promise.allSettled(REGIONS.map((r) => fetchRegion(r.bounds))),
       fetchAllDeposits().catch(() => [] as Deposit[]),
       fetchAllDrillHoles().catch(() => [] as { lng: number; lat: number }[]),
+      fetchRegisterTotal().catch(() => 0),
     ]);
     const raws: RawTenement[] = [];
     const seen = new Set<string>();
@@ -400,7 +416,7 @@ async function refresh(): Promise<void> {
     prevSnap = new Map(enriched.tenements.map((t) => [t.id, { status: t.status, holder: t.holder }]));
     clearOpinionCache(); // AI notes regenerate against the fresh register
 
-    cache.data = { ...enriched, source: "DMIRS / SLIP — Mining Tenements (DMIRS-003)", live: true, generatedAt: new Date().toISOString(), regions: ok, drillPoints };
+    cache.data = { ...enriched, source: "DMIRS / SLIP — Mining Tenements (DMIRS-003)", live: true, generatedAt: new Date().toISOString(), regions: ok, drillPoints, registerTotal };
     cache.fetchedAt = Date.now();
     cache.lastError = null;
     console.log(`[haxax] refreshed ${raws.length} tenements + ${deposits.length} deposits + ${drillPoints.length} drill holes from ${ok}/${REGIONS.length} regions in ${Date.now() - started}ms`);
@@ -488,7 +504,7 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === "/api/health") {
     send(res, 200, {
       ok: !!cache.data, live: cache.data?.live ?? false, source: cache.data?.source ?? null,
-      tenements: cache.data?.tenements.length ?? 0, regions: cache.data?.regions ?? 0,
+      tenements: cache.data?.tenements.length ?? 0, registerTotal: cache.data?.registerTotal ?? 0, regions: cache.data?.regions ?? 0,
       fetchedAt: cache.fetchedAt ? new Date(cache.fetchedAt).toISOString() : null,
       ageMinutes: cache.fetchedAt ? Math.round((Date.now() - cache.fetchedAt) / 60000) : null,
       lastError: cache.lastError,

@@ -28,6 +28,7 @@ export function Overview() {
   const deals = useStore((s) => s.deals);
   const tenements = useStore((s) => s.tenements);
   const stats = useStore((s) => s.stats);
+  const registerTotal = useStore((s) => s.dataRegisterTotal);
   useTick(30000);
 
   const avg = useMemo(() => Math.round(tenements.reduce((a, t) => a + t.score, 0) / (tenements.length || 1)), [tenements]);
@@ -60,7 +61,7 @@ export function Overview() {
         <div>
           <h1>Acquisition desk</h1>
           <div className="sub">
-            {fmtNum(stats.tenements)} tenements under coverage · {regionHeat.length} districts · {stats.highScore} acquire-grade · synced {relTime(new Date(Date.now() - 120000).toISOString())}
+            {fmtNum(stats.tenements)}{registerTotal ? ` of ${fmtNum(registerTotal)} live WA tenements loaded` : " tenements under coverage"} · {regionHeat.length} districts · search any ID for the rest
           </div>
         </div>
         <div className="page-head-actions">
