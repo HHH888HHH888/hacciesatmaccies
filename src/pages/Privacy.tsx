@@ -38,10 +38,9 @@ export function Privacy() {
           <p>We deliberately collect as little as possible about users. We do not run analytics,
             advertising or third-party trackers.</p>
           <ul>
-            <li><strong>Authentication.</strong> When you sign in, you enter an access key and an
-              account password. These are checked on our server against values held in server-side
-              configuration; we do not store what you type beyond the moment of verification, and we
-              never expose passwords to the browser.</li>
+            <li><strong>Authentication.</strong> When you sign in, you enter a single access code. It is
+              checked on our server against a value held in server-side configuration; we do not store
+              what you type beyond the moment of verification, and we never expose it to the browser.</li>
             <li><strong>Session cookies.</strong> On successful sign-in we set two strictly-necessary,
               HTTP-only cookies (a site-gate token and an account session token). They keep you signed
               in for about 12 hours and are not used for tracking or profiling.</li>

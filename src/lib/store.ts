@@ -149,21 +149,19 @@ interface Store {
   lastSync: number;
   bumpSync: () => void;
 
-  // access lock (server-side gate + accounts)
-  auth: { ready: boolean; gate: boolean; account: string | null; accounts: string[] };
+  // access lock (single server-side access code)
+  auth: { ready: boolean; authed: boolean };
   refreshAuth: () => Promise<void>;
-  unlock: (password: string) => Promise<boolean>;
-  login: (account: string, password: string) => Promise<boolean>;
+  login: (password: string) => Promise<boolean>;
   logout: () => Promise<void>;
 }
 
-/* per-account persistence: watchlist/deals/theme are stored under a key
-   scoped to the signed-in account, so each account is its own clean slate. */
-let currentAccount: string | null = null;
+/* single-operator persistence: watchlist/deals/theme load once authed. */
+let authed = false;
 const accountStorage = {
-  getItem: (name: string) => (currentAccount ? localStorage.getItem(`${name}:${currentAccount}`) : null),
-  setItem: (name: string, value: string) => { if (currentAccount) localStorage.setItem(`${name}:${currentAccount}`, value); },
-  removeItem: (name: string) => { if (currentAccount) localStorage.removeItem(`${name}:${currentAccount}`); },
+  getItem: (name: string) => (authed ? localStorage.getItem(`${name}:op`) : null),
+  setItem: (name: string, value: string) => { if (authed) localStorage.setItem(`${name}:op`, value); },
+  removeItem: (name: string) => { if (authed) localStorage.removeItem(`${name}:op`); },
 };
 
 export const useStore = create<Store>()(
@@ -250,41 +248,31 @@ export const useStore = create<Store>()(
       lastSync: Date.now(),
       bumpSync: () => set({ lastSync: Date.now() }),
 
-      auth: { ready: false, gate: false, account: null, accounts: ["Admin", "Guest"] },
+      auth: { ready: false, authed: false },
       refreshAuth: async () => {
         try {
           const r = await fetch("/api/auth/me");
           const d = await r.json();
-          if (d.account) { currentAccount = d.account; await useStore.persist.rehydrate(); }
-          set({ auth: { ready: true, gate: !!d.gate, account: d.account ?? null, accounts: d.accounts ?? ["Admin", "Guest"] } });
+          if (d.authed) { authed = true; await useStore.persist.rehydrate(); }
+          set({ auth: { ready: true, authed: !!d.authed } });
         } catch {
           set((s) => ({ auth: { ...s.auth, ready: true } }));
         }
       },
-      unlock: async (password) => {
+      login: async (password) => {
         try {
-          const r = await fetch("/api/auth/unlock", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) });
+          const r = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) });
           if (!r.ok) return false;
-          set((s) => ({ auth: { ...s.auth, gate: true } }));
-          return true;
-        } catch { return false; }
-      },
-      login: async (account, password) => {
-        try {
-          const r = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ account, password }) });
-          if (!r.ok) return false;
-          // fresh slate, then load this account's own saved state (if any)
-          set({ watchlist: [], deals: {} });
-          currentAccount = account;
+          authed = true;
           await useStore.persist.rehydrate();
-          set((s) => ({ auth: { ...s.auth, account } }));
+          set((s) => ({ auth: { ...s.auth, authed: true } }));
           return true;
         } catch { return false; }
       },
       logout: async () => {
         try { await fetch("/api/auth/logout", { method: "POST" }); } catch { /* ignore */ }
-        currentAccount = null;
-        set((s) => ({ auth: { ...s.auth, gate: false, account: null }, watchlist: [], deals: {}, selectedId: null }));
+        authed = false;
+        set((s) => ({ auth: { ...s.auth, authed: false }, selectedId: null }));
       },
     }),
     {

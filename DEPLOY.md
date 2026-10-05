@@ -1,7 +1,7 @@
 # Deploying Haxax to haxax.com
 
 Haxax is **one Node service**: `npm start` runs the API **and** serves the built web app
-from `dist/`. The access lock (gate password → Admin / Guest sign-in) is enforced
+from `dist/`. The access lock (a single access code) is enforced
 **server-side**, and the live-data API is locked behind a valid session. That lock is only
 truly secure over **HTTPS**, so the deploy must terminate TLS for haxax.com.
 
@@ -16,9 +16,7 @@ On the server, create `.env` (never commit it). The values you chose:
 
 ```
 HAXAX_API_PORT=8787
-HAXAX_GATE_PASSWORD=haxax888       # site access key
-HAXAX_ADMIN_PASSWORD=haig888       # Admin sign-in
-HAXAX_GUEST_PASSWORD=haxax888      # Guest sign-in
+HAXAX_ACCESS_PASSWORD=haxax888     # the single access code
 HAXAX_SESSION_SECRET=<long-random> # node -e "console.log(require('crypto').randomBytes(24).toString('hex'))"
 MINIMAX_API_KEY=...                # your MiniMax key (AI notes/memos)
 MINIMAX_MODEL=MiniMax-M2
@@ -83,7 +81,7 @@ git branch -M main && git push -u origin main
 **2. Create the service on Render:**
 - https://render.com → **New → Blueprint** → connect the GitHub repo.
 - Render reads `render.yaml` and asks for the `sync: false` secrets — paste:
-  `HAXAX_GATE_PASSWORD`, `HAXAX_ADMIN_PASSWORD`, `HAXAX_GUEST_PASSWORD`, `MINIMAX_API_KEY`.
+  `HAXAX_ACCESS_PASSWORD`, `MINIMAX_API_KEY`.
   (Session secret is auto-generated; `NODE_ENV`, model, and URL are preset.)
 - Click **Apply**. First build runs `npm install && npm run build`, then `npm start`.
 - You get a live URL like `https://haxax.onrender.com`. Test the gate there first.
@@ -119,12 +117,7 @@ git branch -M main && git push -u origin main
 - **Rotate** any password that's been shared in chat/email by editing `.env` and
   restarting. Keep `.env` off git (it already is).
 
-## Accounts
+## Access
 
-| Account | Purpose                       | Starts as          |
-|---------|-------------------------------|--------------------|
-| Admin   | You — full control            | empty watchlist/deals |
-| Guest   | Anyone else — read & analyse  | empty watchlist/deals |
-
-Each account's watchlist/deals are stored separately in the browser, so signing in
-gives a clean slate and accounts never see each other's saved work.
+A single access code (`HAXAX_ACCESS_PASSWORD`) unlocks the terminal — one operator, one
+account. Watchlist, deals and theme are saved in the browser for that operator.

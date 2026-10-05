@@ -34,7 +34,7 @@ import { REGIONS } from "../src/lib/geo";
 import { depositStageLabel, enrichAll, enrichTenement, mapDepositCommodity, type Deposit, type RawTenement } from "../src/lib/enrich";
 import type { Alert, Tenement } from "../src/lib/types";
 import { aiEnabled, aiProvider, clearOpinionCache, generateMemo, generateOpinion, interpretQuery } from "./ai";
-import { ACCOUNT_NAMES, checkAccount, checkGate, gateToken, hasGate, sessionAccount, sessionToken } from "./auth";
+import { checkAccess, hasSession, sessionToken } from "./auth";
 
 // Prefer HAXAX_API_PORT locally (set in .env) so we never collide with Vite's PORT.
 // Fall back to PORT for hosts that inject it (Render, Railway, etc.), then 8787.
@@ -505,9 +505,9 @@ function setCookie(name: string, value: string, maxAgeSec: number): string {
   if (IS_PROD) bits.push("Secure");
   return bits.join("; ");
 }
-// data endpoints require a valid account session; health + auth + static are open
-function requireSession(req: http.IncomingMessage): string | null {
-  return sessionAccount(parseCookies(req)["haxax_session"]);
+// data endpoints require a valid session; health + auth + static are open
+function requireSession(req: http.IncomingMessage): boolean {
+  return hasSession(parseCookies(req)["haxax_session"]);
 }
 
 /* ---------- static (built SPA) serving for production ---------- */
@@ -551,20 +551,12 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  /* ---------- auth ---------- */
-  if (req.method === "POST" && url.pathname === "/api/auth/unlock") {
+  /* ---------- auth (single access code) ---------- */
+  if (req.method === "POST" && url.pathname === "/api/auth/login") {
     let pw = "";
     try { pw = (JSON.parse(await readBody(req)).password ?? "").toString(); } catch { /* ignore */ }
-    if (!checkGate(pw)) { send(res, 401, { ok: false }); return; }
-    send(res, 200, { ok: true }, { "Set-Cookie": setCookie("haxax_gate", gateToken(), 12 * 3600) });
-    return;
-  }
-  if (req.method === "POST" && url.pathname === "/api/auth/login") {
-    let account = "", pw = "";
-    try { const b = JSON.parse(await readBody(req)); account = (b.account ?? "").toString(); pw = (b.password ?? "").toString(); } catch { /* ignore */ }
-    if (!hasGate(parseCookies(req)["haxax_gate"])) { send(res, 403, { ok: false, error: "locked" }); return; }
-    if (!checkAccount(account, pw)) { send(res, 401, { ok: false }); return; }
-    send(res, 200, { ok: true, account }, { "Set-Cookie": setCookie("haxax_session", sessionToken(account), 12 * 3600) });
+    if (!checkAccess(pw)) { send(res, 401, { ok: false }); return; }
+    send(res, 200, { ok: true }, { "Set-Cookie": setCookie("haxax_session", sessionToken(), 12 * 3600) });
     return;
   }
   if (req.method === "POST" && url.pathname === "/api/auth/logout") {
@@ -572,8 +564,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (url.pathname === "/api/auth/me") {
-    const c = parseCookies(req);
-    send(res, 200, { gate: hasGate(c["haxax_gate"]), account: sessionAccount(c["haxax_session"]), accounts: ACCOUNT_NAMES });
+    send(res, 200, { authed: hasSession(parseCookies(req)["haxax_session"]) });
     return;
   }
 
@@ -723,7 +714,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, () => {
   console.log(`[haxax] live data service on http://localhost:${PORT}  (sources: SLIP / DMIRS)`);
   console.log(`[haxax] AI research notes: ${aiProvider() ?? "off (set MINIMAX_API_KEY in .env to enable)"}`);
-  console.log(`[haxax] access: locked — gate + accounts [${ACCOUNT_NAMES.join(", ")}]${IS_PROD ? "" : "  (dev: cookies non-Secure)"}`);
+  console.log(`[haxax] access: locked — single access code${IS_PROD ? "" : "  (dev: cookies non-Secure)"}`);
   if (fs.existsSync(DIST)) console.log(`[haxax] serving built app from ./dist`);
   refresh();
   setInterval(refresh, REFRESH_MS);

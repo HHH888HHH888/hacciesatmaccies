@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Command as CommandIcon, Crosshair, LogOut, Moon, Search, ShieldCheck, Star, Sun, User } from "lucide-react";
+import { Bell, Command as CommandIcon, Crosshair, Lock, LogOut, Moon, Search, Star, Sun } from "lucide-react";
 import { assessTenement, useStore } from "../lib/store";
 import { useClickOutside } from "../lib/hooks";
 import { HaxaxLogo } from "./Logo";
@@ -136,17 +136,15 @@ export function TopNav() {
   );
 }
 
-/* signed-in account + lock control */
+/* lock control */
 function AccountChip() {
-  const account = useStore((s) => s.auth.account);
+  const authed = useStore((s) => s.auth.authed);
   const logout = useStore((s) => s.logout);
-  if (!account) return null;
-  const Icon = account === "Admin" ? ShieldCheck : User;
+  if (!authed) return null;
   return (
-    <div className="acct-chip" title={`Signed in as ${account}`}>
-      <Icon size={14} className="acct-chip-ic" />
-      <span className="acct-chip-name hide-sm">{account}</span>
-      <button className="acct-chip-out" onClick={logout} aria-label="Sign out and lock terminal" title="Sign out · lock terminal">
+    <div className="acct-chip" title="Lock terminal">
+      <Lock size={13} className="acct-chip-ic" />
+      <button className="acct-chip-out" onClick={logout} aria-label="Lock terminal" title="Lock terminal">
         <LogOut size={14} />
       </button>
     </div>

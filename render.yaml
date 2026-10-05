@@ -17,12 +17,8 @@ services:
         value: production            # makes session cookies Secure (HTTPS-only)
       - key: HAXAX_SESSION_SECRET
         generateValue: true          # Render generates a stable secret (sessions survive restarts)
-      - key: HAXAX_GATE_PASSWORD
-        sync: false                  # set in the dashboard (site access key)
-      - key: HAXAX_ADMIN_PASSWORD
-        sync: false                  # set in the dashboard (Admin sign-in)
-      - key: HAXAX_GUEST_PASSWORD
-        sync: false                  # set in the dashboard (Guest sign-in)
+      - key: HAXAX_ACCESS_PASSWORD
+        sync: false                  # set in the dashboard (the single access code)
       - key: MINIMAX_API_KEY
         sync: false                  # set in the dashboard (AI notes/memos)
       - key: MINIMAX_MODEL

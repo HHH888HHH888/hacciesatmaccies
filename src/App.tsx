@@ -38,7 +38,7 @@ export default function App() {
   useEffect(() => { refreshAuth(); }, [refreshAuth]);
 
   // load the live register only once signed in
-  useEffect(() => { if (auth.account) bootstrapData(); }, [auth.account]);
+  useEffect(() => { if (auth.authed) bootstrapData(); }, [auth.authed]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -58,9 +58,9 @@ export default function App() {
   if (location.pathname === "/privacy") return <Privacy />;
   if (location.pathname === "/terms") return <Terms />;
 
-  // access lock: gate password, then account selection
+  // access lock: single access code
   if (!auth.ready) return <DataSplash label="Securing session…" />;
-  if (!auth.account) return <AuthScreens />;
+  if (!auth.authed) return <AuthScreens />;
 
   if (dataStatus === "loading") return <DataSplash />;
 

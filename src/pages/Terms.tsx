@@ -33,10 +33,9 @@ export function Terms() {
         </p>
 
         <Section n="1" title="Authorised access only">
-          <p>Haxax is private and is intended for a small number of authorised users. Access is
-            controlled by a site access key and account credentials. You must keep those credentials
-            confidential, must not share them, and are responsible for activity conducted under your
-            account. We may suspend or revoke access at any time.</p>
+          <p>Haxax is private and is intended for authorised use by its operator. Access is controlled
+            by a single access code. You must keep it confidential, must not share it, and are
+            responsible for activity conducted under it. We may suspend or revoke access at any time.</p>
         </Section>
 
         <Section n="2" title="Nature of the service — decision support only">
