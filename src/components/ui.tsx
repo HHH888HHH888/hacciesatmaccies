@@ -132,7 +132,9 @@ export function ActionBadge({ action }: { action: SuggestedAction }) {
 /* ---------- status badge ---------- */
 export function StatusBadge({ status }: { status: TenementStatus }) {
   const tone =
-    status === "Live" || status === "Granted" ? "pos" : status === "Expiring" || status === "Pending" ? "warn" : "neutral";
+    status === "Live" || status === "Granted" ? "pos"
+      : status === "Dead" ? "neg"
+        : status === "Expiring" || status === "Pending" ? "warn" : "neutral";
   return <span className={`status-badge status-badge--${tone}`}>{status}</span>;
 }
 

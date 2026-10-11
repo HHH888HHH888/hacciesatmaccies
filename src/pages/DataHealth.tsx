@@ -20,6 +20,8 @@ export function DataHealth() {
   const generatedAt = useStore((s) => s.dataGeneratedAt);
   const regions = useStore((s) => s.dataRegions);
   const registerTotal = useStore((s) => s.dataRegisterTotal);
+  const sourceExtract = useStore((s) => s.dataSourceExtract);
+  const extractDate = sourceExtract ? new Date(sourceExtract).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : null;
   const [syncing, setSyncing] = useState(false);
   useTick(15000);
 
@@ -84,9 +86,15 @@ export function DataHealth() {
               context (geology, mineral field, LGA, native title, WAMEX) is queried live from government services per
               tenement, when you open it.
             </p>
+            <p className="prose" style={{ fontSize: "var(--fs-12)", marginBottom: "var(--sp-2)" }}>
+              <strong>DMIRS feed as at {extractDate ?? "—"}.</strong> The register publishes a periodic extract (every few
+              days), which Haxax re-syncs every 30 minutes — so the data is always as current as DMIRS publishes, but it is
+              not second-by-second real-time. Any tenement ID is searchable live, including expired/dead ones (from the DMIRS
+              archive, with the reduced fields DMIRS publishes for them).
+            </p>
             <p className="prose faint" style={{ fontSize: "var(--fs-11)" }}>
-              Data is a public DMIRS/SLIP feed cached ~30 min — a research tool, not the authoritative register, and not a
-              valuation. Verify every target on the official record before transacting.
+              This is a research tool, not the authoritative register, and not a valuation. Verify every target on the
+              official record before transacting.
             </p>
             <div className="row gap-2 wrap" style={{ marginTop: "var(--sp-3)" }}>
               <a className="btn btn--sm" href={TENGRAPH_URL} target="_blank" rel="noreferrer"><ExternalLink size={13} /> TENGRAPH Web (official)</a>

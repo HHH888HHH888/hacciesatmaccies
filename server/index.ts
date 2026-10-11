@@ -54,6 +54,8 @@ const L_NT_DET = `${SVC}/Boundaries/MapServer/24/query`;                 // Nati
 const L_NT_CLAIM = `${SVC}/Boundaries/MapServer/21/query`;               // Native Title (NNTT claim)
 const L_WAMEX = `${SVC}/Industry_and_Mining/MapServer/22/query`;         // WAMEX exploration reports
 const L_MAPSHEET = `${SVC}/Industry_and_Mining/MapServer/40/query`;      // 1:250k geological map sheet index
+const SLIP_DEAD = `${SVC}/Industry_and_Mining/MapServer/15/query`;       // Tenements - DEAD (DMIRS-026) — the expired/surrendered archive
+const DEAD_OUT_FIELDS = "fmt_tenid,type,tenstatus,survstatus,grantdate,startdate,enddate"; // reduced fields DMIRS publishes for dead tenements
 const DEPOSITS_PER_REGION = 140;
 const DRILLHOLES_PER_REGION = 160;
 const PER_REGION = 26; // bound volume; ~10 regions → ~240 live tenements
@@ -62,7 +64,7 @@ const OUT_FIELDS = "fmt_tenid,type,tenstatus,survstatus,special_in,holder1,holde
 
 type Payload = ReturnType<typeof enrichAll>;
 interface Cache {
-  data: (Payload & { source: string; live: boolean; generatedAt: string; regions: number; drillPoints: { lng: number; lat: number }[]; registerTotal: number }) | null;
+  data: (Payload & { source: string; live: boolean; generatedAt: string; regions: number; drillPoints: { lng: number; lat: number }[]; registerTotal: number; sourceExtract: string | null }) | null;
   fetchedAt: number;
   refreshing: boolean;
   lastError: string | null;
@@ -381,37 +383,59 @@ async function fetchAllDeposits(): Promise<Deposit[]> {
 }
 
 /* ---------- look up a single tenement anywhere in WA by ID ---------- */
-async function lookupTenement(id: string): Promise<Tenement | null> {
+async function queryTenementById(layerUrl: string, id: string, outFields: string): Promise<RawTenement | null> {
   const norm = id.toUpperCase().replace(/\s+/g, " ").trim();
   const m = norm.match(/^([A-Z]+)\s*(.+)$/);
   const variants = new Set<string>([norm]);
   if (m) { variants.add(`${m[1]} ${m[2]}`); variants.add(`${m[1]}${m[2]}`); }
   const inClause = [...variants].map((v) => `'${v.replace(/'/g, "''")}'`).join(",");
   const params = new URLSearchParams({
-    where: `fmt_tenid IN (${inClause})`, outFields: OUT_FIELDS, outSR: "4326",
+    where: `fmt_tenid IN (${inClause})`, outFields, outSR: "4326",
     returnGeometry: "true", resultRecordCount: "1", f: "geojson",
   });
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), 20000);
   try {
-    const res = await fetch(`${SLIP}?${params.toString()}`, { signal: ctrl.signal, headers: { "User-Agent": "Haxax/1.0" } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const res = await fetch(`${layerUrl}?${params.toString()}`, { signal: ctrl.signal, headers: { "User-Agent": "Haxax/1.0" } });
+    if (!res.ok) return null;
     const json: any = await res.json();
-    const raw = parseFeature((json.features ?? [])[0]);
-    if (!raw) return null;
-    const t = enrichTenement(raw, Date.now(), cache.data?.deposits, cache.data?.drillPoints);
-    // borrow region percentile from the cached live set for context
-    if (cache.data) {
-      const peers = cache.data.tenements.filter((x) => x.regionId === t.regionId);
-      if (peers.length) t.scorePercentile = Math.round((peers.filter((p) => p.score < t.score).length / peers.length) * 100);
-    }
-    return t;
-  } catch (err) {
-    console.error(`[haxax] lookup failed for "${id}": ${(err as Error).message}`);
-    return null;
-  } finally {
-    clearTimeout(to);
+    return parseFeature((json.features ?? [])[0]);
+  } catch { return null; } finally { clearTimeout(to); }
+}
+
+/** Resolve ANY tenement by ID: live/pending first (full data), else the DEAD archive (reduced fields). */
+async function lookupTenement(id: string): Promise<Tenement | null> {
+  let raw = await queryTenementById(SLIP, id, OUT_FIELDS);
+  let dead = false;
+  if (!raw) {
+    raw = await queryTenementById(SLIP_DEAD, id, DEAD_OUT_FIELDS);
+    if (raw) { dead = true; raw.status = "DEAD"; } // DMIRS publishes no holder/area for dead tenements
   }
+  if (!raw) return null;
+  const t = enrichTenement(raw, Date.now(), cache.data?.deposits, cache.data?.drillPoints);
+  if (dead) t.status = "Dead";
+  if (cache.data) {
+    const peers = cache.data.tenements.filter((x) => x.regionId === t.regionId);
+    if (peers.length) t.scorePercentile = Math.round((peers.filter((p) => p.score < t.score).length / peers.length) * 100);
+  }
+  return t;
+}
+
+/** The DMIRS feed's own extract date — the true 'as at' of the data (it publishes periodically, not live). */
+async function fetchExtractDate(): Promise<string | null> {
+  const params = new URLSearchParams({
+    where: "extract_da IS NOT NULL", outFields: "extract_da", orderByFields: "extract_da DESC",
+    resultRecordCount: "1", returnGeometry: "false", f: "json",
+  });
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 20000);
+  try {
+    const res = await fetch(`${SLIP}?${params.toString()}`, { signal: ctrl.signal, headers: { "User-Agent": "Haxax/1.0" } });
+    if (!res.ok) return null;
+    const j: any = await res.json();
+    const ms = j.features?.[0]?.attributes?.extract_da;
+    return typeof ms === "number" ? new Date(ms).toISOString() : null;
+  } catch { return null; } finally { clearTimeout(to); }
 }
 
 /* ---------- refresh the cache from SLIP ---------- */
@@ -420,11 +444,12 @@ async function refresh(): Promise<void> {
   cache.refreshing = true;
   const started = Date.now();
   try {
-    const [results, deposits, drillPoints, registerTotal] = await Promise.all([
+    const [results, deposits, drillPoints, registerTotal, sourceExtract] = await Promise.all([
       Promise.allSettled(REGIONS.map((r) => fetchRegion(r.bounds))),
       fetchAllDeposits().catch(() => [] as Deposit[]),
       fetchAllDrillHoles().catch(() => [] as { lng: number; lat: number }[]),
       fetchRegisterTotal().catch(() => 0),
+      fetchExtractDate().catch(() => null),
     ]);
     const raws: RawTenement[] = [];
     const seen = new Set<string>();
@@ -454,7 +479,7 @@ async function refresh(): Promise<void> {
     prevSnap = new Map(enriched.tenements.map((t) => [t.id, { status: t.status, holder: t.holder }]));
     clearOpinionCache(); // AI notes regenerate against the fresh register
 
-    cache.data = { ...enriched, source: "DMIRS / SLIP — Mining Tenements (DMIRS-003)", live: true, generatedAt: new Date().toISOString(), regions: ok, drillPoints, registerTotal };
+    cache.data = { ...enriched, source: "DMIRS / SLIP — Mining Tenements (DMIRS-003)", live: true, generatedAt: new Date().toISOString(), regions: ok, drillPoints, registerTotal, sourceExtract };
     cache.fetchedAt = Date.now();
     cache.lastError = null;
     console.log(`[haxax] refreshed ${raws.length} tenements + ${deposits.length} deposits + ${drillPoints.length} drill holes from ${ok}/${REGIONS.length} regions in ${Date.now() - started}ms`);
@@ -543,6 +568,7 @@ const server = http.createServer(async (req, res) => {
     send(res, 200, {
       ok: !!cache.data, live: cache.data?.live ?? false, source: cache.data?.source ?? null,
       tenements: cache.data?.tenements.length ?? 0, registerTotal: cache.data?.registerTotal ?? 0, regions: cache.data?.regions ?? 0,
+      sourceExtract: cache.data?.sourceExtract ?? null,
       fetchedAt: cache.fetchedAt ? new Date(cache.fetchedAt).toISOString() : null,
       ageMinutes: cache.fetchedAt ? Math.round((Date.now() - cache.fetchedAt) / 60000) : null,
       lastError: cache.lastError,

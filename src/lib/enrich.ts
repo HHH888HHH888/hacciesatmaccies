@@ -121,6 +121,7 @@ function mapLicence(rawType: string): LicenceType {
 }
 function mapStatus(raw: string): TenementStatus {
   const s = raw.toUpperCase();
+  if (s.includes("DEAD") || s.includes("SURR") || s.includes("EXPIR") || s.includes("FORFEIT") || s.includes("CANCEL") || s.includes("WITHDRAWN")) return "Dead";
   if (s.includes("PEND")) return "Pending";
   if (s.includes("APPL")) return "Application";
   if (s.includes("GRANT")) return "Granted";

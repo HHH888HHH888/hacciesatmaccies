@@ -24,7 +24,8 @@ export type TenementStatus =
   | "Pending"
   | "Application"
   | "Granted"
-  | "Expiring";
+  | "Expiring"
+  | "Dead";
 
 export type RegionId =
   | "pilbara"

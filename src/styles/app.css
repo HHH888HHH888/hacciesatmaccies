@@ -634,6 +634,8 @@ select.input {
 }
 .status-badge--pos::before { background: var(--score-high); }
 .status-badge--warn::before { background: var(--score-mid); }
+.status-badge--neg::before { background: var(--score-low); }
+.status-badge--neg { color: var(--score-low); }
 
 .risk-badge {
   display: inline-flex;

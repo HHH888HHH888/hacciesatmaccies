@@ -58,8 +58,8 @@ const hasRealExpiry = (t: Tenement) => new Date(t.expiryDate).getFullYear() > 19
 
 /* official DMIRS sources — both verified working, public, no login */
 const TENGRAPH_URL = "https://tgw.dmp.wa.gov.au/tgw/";
-const dmirsRecordUrl = (id: string) =>
-  `https://services.slip.wa.gov.au/public/rest/services/SLIP_Public_Services/Industry_and_Mining/MapServer/3/query?where=fmt_tenid%3D%27${encodeURIComponent(id)}%27&outFields=*&returnGeometry=false&f=html`;
+const dmirsRecordUrl = (id: string, dead = false) =>
+  `https://services.slip.wa.gov.au/public/rest/services/SLIP_Public_Services/Industry_and_Mining/MapServer/${dead ? 15 : 3}/query?where=fmt_tenid%3D%27${encodeURIComponent(id)}%27&outFields=*&returnGeometry=false&f=html`;
 
 export function DetailDrawer() {
   const selectedId = useStore((s) => s.selectedId);
@@ -455,7 +455,7 @@ function TenureTab({ t, ctx }: { t: Tenement; ctx: RealContext | null }) {
         <div className="detail-section-title"><ExternalLink size={13} className="dst-icon" /> Verify on the official record</div>
         <div className="row gap-2 wrap">
           <a className="btn btn--sm" href={TENGRAPH_URL} target="_blank" rel="noreferrer">TENGRAPH Web ↗</a>
-          <a className="btn btn--sm" href={dmirsRecordUrl(t.id)} target="_blank" rel="noreferrer">DMIRS record · {t.id} ↗</a>
+          <a className="btn btn--sm" href={dmirsRecordUrl(t.id, t.status === "Dead")} target="_blank" rel="noreferrer">DMIRS record · {t.id} ↗</a>
         </div>
         <p className="prose faint" style={{ fontSize: "var(--fs-10)", marginTop: "var(--sp-2)" }}>
           TENGRAPH Web is the authoritative DMIRS map — search {t.id} there. The record link opens the live register entry for this exact tenement. Always verify here before transacting.
