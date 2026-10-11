@@ -13,6 +13,7 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
+import nodemailer from "nodemailer";
 
 /* load .env (project root) into process.env — no dependency, runs before anything reads env */
 (() => {
@@ -436,24 +437,38 @@ async function fetchExtractDate(): Promise<string | null> {
   } catch { return null; } finally { clearTimeout(to); }
 }
 
-/* ---------- push notifications (Slack / Discord incoming webhook) ---------- */
-async function sendWebhook(text: string): Promise<void> {
-  const url = process.env.HAXAX_WEBHOOK_URL;
-  if (!url) return;
-  const ctrl = new AbortController();
-  const to = setTimeout(() => ctrl.abort(), 10000);
+/* ---------- push notifications (email via SMTP) ---------- */
+const notifyEnabled = () =>
+  !!(process.env.HAXAX_SMTP_HOST && process.env.HAXAX_SMTP_USER && process.env.HAXAX_SMTP_PASS && process.env.HAXAX_EMAIL_TO);
+
+let mailer: nodemailer.Transporter | null = null;
+function getMailer(): nodemailer.Transporter | null {
+  if (mailer) return mailer;
+  if (!notifyEnabled()) return null;
+  const port = Number(process.env.HAXAX_SMTP_PORT ?? 465);
+  mailer = nodemailer.createTransport({
+    host: process.env.HAXAX_SMTP_HOST,
+    port,
+    secure: port === 465, // 465 = implicit TLS; 587 = STARTTLS
+    auth: { user: process.env.HAXAX_SMTP_USER, pass: process.env.HAXAX_SMTP_PASS },
+  });
+  return mailer;
+}
+async function sendEmail(subject: string, text: string): Promise<boolean> {
+  const t = getMailer();
+  const to = process.env.HAXAX_EMAIL_TO;
+  if (!t || !to) return false;
   try {
-    // Slack reads `text`, Discord reads `content` — send both for compatibility
-    await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, content: text }), signal: ctrl.signal });
-  } catch { /* ignore */ } finally { clearTimeout(to); }
+    await t.sendMail({ from: process.env.HAXAX_EMAIL_FROM || process.env.HAXAX_SMTP_USER, to, subject, text });
+    return true;
+  } catch (e) { console.error(`[haxax] email failed: ${(e as Error).message}`); return false; }
 }
 function notifyLines(header: string, lines: string[]): void {
-  if (!process.env.HAXAX_WEBHOOK_URL || !lines.length) return;
-  const top = lines.slice(0, 12).map((l) => `• ${l}`).join("\n");
-  const more = lines.length > 12 ? `\n…and ${lines.length - 12} more` : "";
-  void sendWebhook(`HAXAX — ${header} (${lines.length})\n${top}${more}\nhttps://haxax.com/#/monitor`);
+  if (!notifyEnabled() || !lines.length) return;
+  const top = lines.slice(0, 25).map((l) => `• ${l}`).join("\n");
+  const more = lines.length > 25 ? `\n…and ${lines.length - 25} more` : "";
+  void sendEmail(`Haxax — ${header} (${lines.length})`, `${top}${more}\n\nOpen Monitor: https://haxax.com/#/monitor`);
 }
-const notifyEnabled = () => !!process.env.HAXAX_WEBHOOK_URL;
 
 /* ============================================================
    Register-wide watches — saved monitors over the FULL register.
@@ -955,8 +970,8 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === "/api/watches/test-notify" && req.method === "POST") {
     if (!notifyEnabled()) { send(res, 200, { ok: false, configured: false }); return; }
-    await sendWebhook("HAXAX — test notification. Your watch & register alerts will arrive here.\nhttps://haxax.com/#/monitor");
-    send(res, 200, { ok: true, configured: true });
+    const sent = await sendEmail("Haxax — test notification", "Your watch & register alerts will arrive at this address.\n\nOpen Monitor: https://haxax.com/#/monitor");
+    send(res, 200, { ok: sent, configured: true });
     return;
   }
   if (url.pathname === "/api/watches" && req.method === "POST") {
@@ -1025,7 +1040,7 @@ server.listen(PORT, () => {
   loadWatches();
   loadRegWatch();
   console.log(`[haxax] ${watches.length} watch(es) loaded · register-wide change detection ${regSnapshot.size ? `(baseline ${regSnapshot.size})` : "(cold)"}`);
-  console.log(`[haxax] push notifications: ${notifyEnabled() ? "on (webhook)" : "off (set HAXAX_WEBHOOK_URL to a Slack/Discord webhook)"}`);
+  console.log(`[haxax] email notifications: ${notifyEnabled() ? `on (to ${process.env.HAXAX_EMAIL_TO})` : "off (set HAXAX_SMTP_* + HAXAX_EMAIL_TO)"}`);
   refresh();
   setInterval(refresh, REFRESH_MS);
   // register-wide change detection: baseline shortly after boot, then every 6h (source updates every few days)

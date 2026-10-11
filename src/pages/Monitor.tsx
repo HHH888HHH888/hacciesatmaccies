@@ -29,7 +29,7 @@ export function Monitor() {
   const sendTest = async () => {
     setTestMsg("Sending…");
     const r = await testNotify();
-    setTestMsg(r.ok ? "Sent — check your Slack/Discord." : "Not configured.");
+    setTestMsg(r.ok ? "Sent — check your email." : r.configured ? "Send failed — check SMTP creds." : "Email not configured.");
     setTimeout(() => setTestMsg(""), 4000);
   };
 
@@ -49,8 +49,8 @@ export function Monitor() {
         </div>
         <div className="page-head-actions">
           {notify
-            ? <button className="btn" onClick={sendTest} title="Send a test notification to your webhook"><BellRing size={14} /> {testMsg || "Test alert"}</button>
-            : <span className="faint" style={{ fontSize: "var(--fs-11)", maxWidth: 240, textAlign: "right" }} title="Set HAXAX_WEBHOOK_URL on the server to a Slack or Discord incoming webhook">Push off · add a Slack/Discord webhook</span>}
+            ? <button className="btn" onClick={sendTest} title="Send a test email to your configured address"><BellRing size={14} /> {testMsg || "Test email"}</button>
+            : <span className="faint" style={{ fontSize: "var(--fs-11)", maxWidth: 240, textAlign: "right" }} title="Set HAXAX_SMTP_* + HAXAX_EMAIL_TO on the server to enable email alerts">Email alerts off · add SMTP config</span>}
           <button className="btn" onClick={check} disabled={checking}><RefreshCw size={14} className={checking ? "spin" : ""} /> {checking ? "Checking…" : "Check now"}</button>
         </div>
       </div>
