@@ -16,9 +16,13 @@ export interface WatchEvent {
 }
 export interface WatchMatch { id: string; holder: string; type: string; status: string; endDate: string | null; }
 
-export async function getWatches(): Promise<{ watches: Watch[]; events: WatchEvent[] }> {
+export async function getWatches(): Promise<{ watches: Watch[]; events: WatchEvent[]; notify?: boolean }> {
   try { const r = await fetch("/api/watches"); if (!r.ok) return { watches: [], events: [] }; return await r.json(); }
   catch { return { watches: [], events: [] }; }
+}
+export async function testNotify(): Promise<{ ok: boolean; configured: boolean }> {
+  try { const r = await fetch("/api/watches/test-notify", { method: "POST" }); if (!r.ok) return { ok: false, configured: false }; return await r.json(); }
+  catch { return { ok: false, configured: false }; }
 }
 export async function createWatch(name: string, criteria: WatchCriteria): Promise<Watch | null> {
   try {

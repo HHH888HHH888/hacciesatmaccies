@@ -436,6 +436,25 @@ async function fetchExtractDate(): Promise<string | null> {
   } catch { return null; } finally { clearTimeout(to); }
 }
 
+/* ---------- push notifications (Slack / Discord incoming webhook) ---------- */
+async function sendWebhook(text: string): Promise<void> {
+  const url = process.env.HAXAX_WEBHOOK_URL;
+  if (!url) return;
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 10000);
+  try {
+    // Slack reads `text`, Discord reads `content` — send both for compatibility
+    await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text, content: text }), signal: ctrl.signal });
+  } catch { /* ignore */ } finally { clearTimeout(to); }
+}
+function notifyLines(header: string, lines: string[]): void {
+  if (!process.env.HAXAX_WEBHOOK_URL || !lines.length) return;
+  const top = lines.slice(0, 12).map((l) => `• ${l}`).join("\n");
+  const more = lines.length > 12 ? `\n…and ${lines.length - 12} more` : "";
+  void sendWebhook(`HAXAX — ${header} (${lines.length})\n${top}${more}\nhttps://haxax.com/#/monitor`);
+}
+const notifyEnabled = () => !!process.env.HAXAX_WEBHOOK_URL;
+
 /* ============================================================
    Register-wide watches — saved monitors over the FULL register.
    Each watch is a live query against SLIP (all ~30k tenements,
@@ -548,8 +567,11 @@ async function runWatch(w: Watch, emitEvents: boolean): Promise<WatchMatch[]> {
   return matches;
 }
 async function runAllWatches(): Promise<void> {
+  const before = new Set(watchEvents.map((e) => e.id));
   for (const w of watches) { try { await runWatch(w, true); } catch { /* ignore */ } }
   if (watches.length) saveWatches();
+  const fresh = watchEvents.filter((e) => !before.has(e.id));
+  notifyLines("Watch events", fresh.map((e) => e.detail));
 }
 
 /* ============================================================
@@ -636,6 +658,7 @@ async function snapshotAndDiff(): Promise<void> {
     if (fresh.length) {
       registerAlerts = [...fresh.slice(0, 60), ...registerAlerts].slice(0, 120);
       if (cache.data) cache.data.alerts = mergeAlerts(registerAlerts, cache.data.alerts);
+      notifyLines("Register changes", fresh.map((a) => a.title));
       console.log(`[haxax] register-wide change detection: ${fresh.length} change(s) across ${curr.size} tenements`);
     }
   } else {
@@ -766,6 +789,7 @@ const server = http.createServer(async (req, res) => {
       tenements: cache.data?.tenements.length ?? 0, registerTotal: cache.data?.registerTotal ?? 0, regions: cache.data?.regions ?? 0,
       sourceExtract: cache.data?.sourceExtract ?? null,
       registerWatched: regSnapshot.size, registerWatchedAt: lastSnapshotAt,
+      notify: notifyEnabled(),
       fetchedAt: cache.fetchedAt ? new Date(cache.fetchedAt).toISOString() : null,
       ageMinutes: cache.fetchedAt ? Math.round((Date.now() - cache.fetchedAt) / 60000) : null,
       lastError: cache.lastError,
@@ -925,7 +949,14 @@ const server = http.createServer(async (req, res) => {
     send(res, 200, {
       watches: watches.map((w) => ({ id: w.id, name: w.name, criteria: w.criteria, lastRun: w.lastRun, lastCount: w.lastCount })),
       events: watchEvents.slice(0, 80),
+      notify: notifyEnabled(),
     });
+    return;
+  }
+  if (url.pathname === "/api/watches/test-notify" && req.method === "POST") {
+    if (!notifyEnabled()) { send(res, 200, { ok: false, configured: false }); return; }
+    await sendWebhook("HAXAX — test notification. Your watch & register alerts will arrive here.\nhttps://haxax.com/#/monitor");
+    send(res, 200, { ok: true, configured: true });
     return;
   }
   if (url.pathname === "/api/watches" && req.method === "POST") {
@@ -994,6 +1025,7 @@ server.listen(PORT, () => {
   loadWatches();
   loadRegWatch();
   console.log(`[haxax] ${watches.length} watch(es) loaded · register-wide change detection ${regSnapshot.size ? `(baseline ${regSnapshot.size})` : "(cold)"}`);
+  console.log(`[haxax] push notifications: ${notifyEnabled() ? "on (webhook)" : "off (set HAXAX_WEBHOOK_URL to a Slack/Discord webhook)"}`);
   refresh();
   setInterval(refresh, REFRESH_MS);
   // register-wide change detection: baseline shortly after boot, then every 6h (source updates every few days)

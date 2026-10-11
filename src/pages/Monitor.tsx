@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowUpRight, ArrowDownRight, Bell, Plus, Radar as RadarIcon, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowUpRight, ArrowDownRight, Bell, BellRing, Plus, Radar as RadarIcon, RefreshCw, Trash2 } from "lucide-react";
 import { REGIONS } from "../lib/geo";
 import { assessTenement, useStore } from "../lib/store";
 import { relTime } from "../lib/format";
 import {
-  createWatch, criteriaSummary, deleteWatch, getWatchMatches, getWatches, runWatches,
+  createWatch, criteriaSummary, deleteWatch, getWatchMatches, getWatches, runWatches, testNotify,
   type Watch, type WatchCriteria, type WatchEvent, type WatchMatch,
 } from "../lib/watches";
 
@@ -17,12 +17,21 @@ export function Monitor() {
   const [events, setEvents] = useState<WatchEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
+  const [notify, setNotify] = useState(false);
+  const [testMsg, setTestMsg] = useState("");
 
   const load = async () => {
     const d = await getWatches();
-    setWatches(d.watches); setEvents(d.events); setLoading(false);
+    setWatches(d.watches); setEvents(d.events); setNotify(!!d.notify); setLoading(false);
   };
   useEffect(() => { load(); }, []);
+
+  const sendTest = async () => {
+    setTestMsg("Sending…");
+    const r = await testNotify();
+    setTestMsg(r.ok ? "Sent — check your Slack/Discord." : "Not configured.");
+    setTimeout(() => setTestMsg(""), 4000);
+  };
 
   const check = async () => {
     setChecking(true);
@@ -39,6 +48,9 @@ export function Monitor() {
           <div className="sub">Register-wide watches · query the whole WA register and get alerted when the matching set changes</div>
         </div>
         <div className="page-head-actions">
+          {notify
+            ? <button className="btn" onClick={sendTest} title="Send a test notification to your webhook"><BellRing size={14} /> {testMsg || "Test alert"}</button>
+            : <span className="faint" style={{ fontSize: "var(--fs-11)", maxWidth: 240, textAlign: "right" }} title="Set HAXAX_WEBHOOK_URL on the server to a Slack or Discord incoming webhook">Push off · add a Slack/Discord webhook</span>}
           <button className="btn" onClick={check} disabled={checking}><RefreshCw size={14} className={checking ? "spin" : ""} /> {checking ? "Checking…" : "Check now"}</button>
         </div>
       </div>

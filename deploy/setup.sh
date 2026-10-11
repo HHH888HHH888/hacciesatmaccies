@@ -73,12 +73,14 @@ if [ ! -f "${REPO_DIR}/.env" ]; then
   echo "==> creating .env (press Enter to accept the default in brackets)"
   read -rsp "  Access code [haxax888]: " ACCESS; echo; ACCESS=${ACCESS:-haxax888}
   read -rsp "  MiniMax API key (blank = skip AI notes): " MMKEY; echo
+  read -rp  "  Slack/Discord webhook URL for alerts (blank = skip): " HOOK
   SECRET="$(node -e "console.log(require('crypto').randomBytes(24).toString('hex'))")"
   {
     echo "HAXAX_API_PORT=8787"
     echo "NODE_ENV=production"
     echo "HAXAX_ACCESS_PASSWORD=${ACCESS}"
     echo "HAXAX_SESSION_SECRET=${SECRET}"
+    [ -n "${HOOK}" ] && echo "HAXAX_WEBHOOK_URL=${HOOK}"
     echo "MINIMAX_MODEL=MiniMax-M2"
     echo "MINIMAX_URL=https://api.minimax.io/v1/text/chatcompletion_v2"
     [ -n "${MMKEY}" ] && echo "MINIMAX_API_KEY=${MMKEY}"
