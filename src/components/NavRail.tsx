@@ -10,6 +10,7 @@ import {
   Map as MapIcon,
   PanelLeftClose,
   PanelLeftOpen,
+  Radar,
   Star,
   Trello,
 } from "lucide-react";
@@ -29,6 +30,7 @@ const NAV: NavDef[] = [
   { to: "/deals", label: "Deal Flow", icon: Trello },
   { to: "/watchlist", label: "Watchlist", icon: Star },
   { to: "/alerts", label: "Alerts", icon: Bell, badge: true },
+  { to: "/monitor", label: "Monitor", icon: Radar },
   { to: "/comparables", label: "Peers", icon: BarChart3 },
   { to: "/memo", label: "IC Memo", icon: FileText },
   { to: "/data", label: "Data Health", icon: Activity },

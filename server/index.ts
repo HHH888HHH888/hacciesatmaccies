@@ -438,6 +438,122 @@ async function fetchExtractDate(): Promise<string | null> {
   } catch { return null; } finally { clearTimeout(to); }
 }
 
+/* ============================================================
+   Register-wide watches — saved monitors over the FULL register.
+   Each watch is a live query against SLIP (all ~30k tenements,
+   not the loaded sample); on every refresh we diff the matching
+   set and emit added/removed events. Persisted to data/watches.json.
+   ============================================================ */
+interface WatchCriteria {
+  regions?: string[];
+  licenceTypes?: string[];
+  statuses?: string[];
+  holderContains?: string;
+  expiryWithinMonths?: number;
+}
+interface WatchMatch { id: string; holder: string; type: string; status: string; endDate: string | null; }
+interface Watch { id: string; name: string; criteria: WatchCriteria; createdAt: string; lastRun: string | null; lastCount: number; lastIds: string[]; }
+interface WatchEvent { id: string; watchId: string; watchName: string; kind: "added" | "removed"; tenementId: string; holder: string; detail: string; timestamp: string; }
+
+const WATCHES_FILE = path.resolve(process.cwd(), "data", "watches.json");
+const MAX_WATCHES = 40;
+let watches: Watch[] = [];
+let watchEvents: WatchEvent[] = [];
+
+function loadWatches(): void {
+  try {
+    if (!fs.existsSync(WATCHES_FILE)) return;
+    const j = JSON.parse(fs.readFileSync(WATCHES_FILE, "utf8"));
+    watches = Array.isArray(j.watches) ? j.watches : [];
+    watchEvents = Array.isArray(j.events) ? j.events : [];
+  } catch { /* ignore */ }
+}
+function saveWatches(): void {
+  try {
+    fs.mkdirSync(path.dirname(WATCHES_FILE), { recursive: true });
+    fs.writeFileSync(WATCHES_FILE, JSON.stringify({ watches, events: watchEvents.slice(0, 300) }, null, 2));
+  } catch { /* ignore */ }
+}
+
+const LICENCE_LIKE: Record<string, string> = {
+  Exploration: "EXPLORATION", Prospecting: "PROSPECTING", Mining: "MINING LEASE",
+  "Mineral Lease": "MINERAL LEASE", Retention: "RETENTION", Miscellaneous: "MISCELLANEOUS",
+};
+
+function regionsEnvelope(ids: string[]): [number, number, number, number] | null {
+  const bs = REGIONS.filter((r) => ids.includes(r.id)).map((r) => r.bounds);
+  if (!bs.length) return null;
+  let w = 180, s = 90, e = -180, n = -90;
+  for (const b of bs) { w = Math.min(w, b[0]); s = Math.min(s, b[1]); e = Math.max(e, b[2]); n = Math.max(n, b[3]); }
+  return [w, s, e, n];
+}
+function buildWatchWhere(c: WatchCriteria): string {
+  const parts = [BASE_WHERE];
+  if (c.statuses?.length) parts.push(`tenstatus IN (${c.statuses.map((s) => `'${s.toUpperCase().replace(/'/g, "")}'`).join(",")})`);
+  if (c.licenceTypes?.length) {
+    const ors = c.licenceTypes.map((t) => LICENCE_LIKE[t]).filter(Boolean).map((l) => `type LIKE '%${l}%'`);
+    if (ors.length) parts.push(`(${ors.join(" OR ")})`);
+  }
+  if (c.holderContains && c.holderContains.trim()) {
+    const h = c.holderContains.toUpperCase().replace(/'/g, "''").slice(0, 60);
+    parts.push(`(holder1 LIKE '%${h}%' OR holder2 LIKE '%${h}%' OR holder3 LIKE '%${h}%')`);
+  }
+  if (c.expiryWithinMonths && c.expiryWithinMonths > 0) {
+    const d = new Date(Date.now() + c.expiryWithinMonths * 30.44 * 86400000);
+    parts.push(`enddate <= DATE '${d.toISOString().slice(0, 10)}'`);
+  }
+  return parts.join(" AND ");
+}
+async function queryWatch(c: WatchCriteria): Promise<WatchMatch[]> {
+  const params = new URLSearchParams({
+    where: buildWatchWhere(c), outFields: "fmt_tenid,type,tenstatus,holder1,enddate",
+    outSR: "4326", returnGeometry: "false", resultRecordCount: "1000", f: "json",
+  });
+  const env = c.regions?.length ? regionsEnvelope(c.regions) : null;
+  if (env) {
+    params.set("geometry", env.join(","));
+    params.set("geometryType", "esriGeometryEnvelope");
+    params.set("inSR", "4326");
+    params.set("spatialRel", "esriSpatialRelIntersects");
+  }
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 25000);
+  try {
+    const res = await fetch(`${SLIP}?${params.toString()}`, { signal: ctrl.signal, headers: { "User-Agent": "Haxax/1.0" } });
+    if (!res.ok) return [];
+    const j: any = await res.json();
+    return (j.features ?? []).map((f: any) => {
+      const a = f.attributes ?? {};
+      return {
+        id: String(a.fmt_tenid ?? "").replace(/\s+/g, " ").trim(),
+        holder: titleCaseLite(String(a.holder1 ?? "Holder withheld")),
+        type: String(a.type ?? ""), status: String(a.tenstatus ?? ""),
+        endDate: typeof a.enddate === "number" ? new Date(a.enddate).toISOString() : null,
+      };
+    }).filter((m: WatchMatch) => m.id);
+  } catch { return []; } finally { clearTimeout(to); }
+}
+async function runWatch(w: Watch, emitEvents: boolean): Promise<WatchMatch[]> {
+  const matches = await queryWatch(w.criteria);
+  const ids = matches.map((m) => m.id);
+  const now = new Set(ids);
+  const prev = new Set(w.lastIds);
+  if (emitEvents && w.lastRun) {
+    const ts = new Date().toISOString();
+    const mk = (kind: "added" | "removed", id: string, holder: string, detail: string): WatchEvent =>
+      ({ id: `WE${Date.now()}${Math.random().toString(36).slice(2, 6)}`, watchId: w.id, watchName: w.name, kind, tenementId: id, holder, detail, timestamp: ts });
+    for (const m of matches) if (!prev.has(m.id)) watchEvents.unshift(mk("added", m.id, m.holder, `${m.id} now matches “${w.name}” — ${m.holder}`));
+    for (const id of w.lastIds) if (!now.has(id)) watchEvents.unshift(mk("removed", id, "", `${id} left “${w.name}” — possibly expired, forfeited, transferred or renewed out of criteria`));
+    watchEvents = watchEvents.slice(0, 300);
+  }
+  w.lastIds = ids; w.lastCount = matches.length; w.lastRun = new Date().toISOString();
+  return matches;
+}
+async function runAllWatches(): Promise<void> {
+  for (const w of watches) { try { await runWatch(w, true); } catch { /* ignore */ } }
+  if (watches.length) saveWatches();
+}
+
 /* ---------- refresh the cache from SLIP ---------- */
 async function refresh(): Promise<void> {
   if (cache.refreshing) return;
@@ -483,6 +599,7 @@ async function refresh(): Promise<void> {
     cache.fetchedAt = Date.now();
     cache.lastError = null;
     console.log(`[haxax] refreshed ${raws.length} tenements + ${deposits.length} deposits + ${drillPoints.length} drill holes from ${ok}/${REGIONS.length} regions in ${Date.now() - started}ms`);
+    runAllWatches().catch(() => {}); // re-evaluate saved register-wide monitors against the fresh register
   } catch (err: any) {
     cache.lastError = err?.message ?? String(err);
     console.error(`[haxax] refresh failed: ${cache.lastError}`);
@@ -723,6 +840,58 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  /* ---------- register-wide watches ---------- */
+  if (url.pathname === "/api/watches" && req.method === "GET") {
+    send(res, 200, {
+      watches: watches.map((w) => ({ id: w.id, name: w.name, criteria: w.criteria, lastRun: w.lastRun, lastCount: w.lastCount })),
+      events: watchEvents.slice(0, 80),
+    });
+    return;
+  }
+  if (url.pathname === "/api/watches" && req.method === "POST") {
+    if (watches.length >= MAX_WATCHES) { send(res, 400, { error: `watch limit reached (${MAX_WATCHES})` }); return; }
+    let body: any = {};
+    try { body = JSON.parse(await readBody(req)); } catch { /* ignore */ }
+    const name = String(body.name ?? "").trim().slice(0, 80) || "Untitled watch";
+    const c = body.criteria ?? {};
+    const criteria: WatchCriteria = {
+      regions: Array.isArray(c.regions) ? c.regions.slice(0, 10).map(String) : undefined,
+      licenceTypes: Array.isArray(c.licenceTypes) ? c.licenceTypes.slice(0, 6).map(String) : undefined,
+      statuses: Array.isArray(c.statuses) ? c.statuses.slice(0, 4).map(String) : undefined,
+      holderContains: c.holderContains ? String(c.holderContains).slice(0, 60) : undefined,
+      expiryWithinMonths: Number.isFinite(c.expiryWithinMonths) ? Math.max(0, Math.min(120, Math.round(c.expiryWithinMonths))) : undefined,
+    };
+    const w: Watch = { id: `W${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`, name, criteria, createdAt: new Date().toISOString(), lastRun: null, lastCount: 0, lastIds: [] };
+    await runWatch(w, false); // establish baseline, no events on first run
+    watches.unshift(w);
+    saveWatches();
+    send(res, 200, { ok: true, watch: { id: w.id, name: w.name, criteria: w.criteria, lastRun: w.lastRun, lastCount: w.lastCount } });
+    return;
+  }
+  if (url.pathname === "/api/watches/delete" && req.method === "POST") {
+    let id = "";
+    try { id = String(JSON.parse(await readBody(req)).id ?? ""); } catch { /* ignore */ }
+    watches = watches.filter((w) => w.id !== id);
+    watchEvents = watchEvents.filter((e) => e.watchId !== id);
+    saveWatches();
+    send(res, 200, { ok: true });
+    return;
+  }
+  if (url.pathname === "/api/watches/run" && req.method === "POST") {
+    await runAllWatches();
+    send(res, 200, { ok: true, watches: watches.map((w) => ({ id: w.id, name: w.name, criteria: w.criteria, lastRun: w.lastRun, lastCount: w.lastCount })), events: watchEvents.slice(0, 80) });
+    return;
+  }
+  if (url.pathname === "/api/watches/matches") {
+    const id = url.searchParams.get("id") ?? "";
+    const w = watches.find((x) => x.id === id);
+    if (!w) { send(res, 404, { error: "watch not found" }); return; }
+    const matches = await runWatch(w, false);
+    saveWatches();
+    send(res, 200, { matches });
+    return;
+  }
+
   if (url.pathname.startsWith("/api/tenements/")) {
     const id = decodeURIComponent(url.pathname.replace("/api/tenements/", ""));
     const t = cache.data?.tenements.find((x) => x.id === id);
@@ -742,6 +911,8 @@ server.listen(PORT, () => {
   console.log(`[haxax] AI research notes: ${aiProvider() ?? "off (set MINIMAX_API_KEY in .env to enable)"}`);
   console.log(`[haxax] access: locked — single access code${IS_PROD ? "" : "  (dev: cookies non-Secure)"}`);
   if (fs.existsSync(DIST)) console.log(`[haxax] serving built app from ./dist`);
+  loadWatches();
+  console.log(`[haxax] ${watches.length} register-wide watch(es) loaded`);
   refresh();
   setInterval(refresh, REFRESH_MS);
 });

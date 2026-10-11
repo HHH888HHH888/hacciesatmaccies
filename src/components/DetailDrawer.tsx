@@ -73,7 +73,7 @@ export function DetailDrawer() {
   const [tab, setTab] = useState<Tab>("brief");
 
   // pages that present their own detail — don't double up with the drawer
-  const suppressed = pathname === "/memo" || pathname === "/data" || pathname === "/comparables";
+  const suppressed = pathname === "/memo" || pathname === "/data" || pathname === "/comparables" || pathname === "/monitor";
   const t = selectedId && !suppressed ? tenements.find((x) => x.id === selectedId) : undefined;
 
   // LLM-generated research note (when an AI key is configured server-side)

@@ -1842,6 +1842,12 @@ table.data-table { width: 100%; border-collapse: collapse; font-size: var(--fs-1
 @keyframes splashbar { 0% { transform: translateX(-110%); } 100% { transform: translateX(320%); } }
 .splash-src { font-family: var(--font-mono); font-size: var(--fs-10); color: var(--text-faint); letter-spacing: 0.06em; margin-top: var(--sp-2); }
 
+/* ---- monitor (register-wide watches) ---- */
+.monitor-grid { display: grid; grid-template-columns: 1fr 380px; gap: var(--sp-4); align-items: start; }
+@media (max-width: 1040px) { .monitor-grid { grid-template-columns: 1fr; } }
+.watch-card { border: 1px solid var(--border); border-radius: var(--r-md); padding: var(--sp-3) var(--sp-4); background: var(--bg-inset); }
+.watch-matches { margin-top: var(--sp-2); padding-top: var(--sp-2); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow-y: auto; }
+
 /* ---- legal / privacy page ---- */
 .legal-page {
   min-height: 100vh; min-height: 100dvh;

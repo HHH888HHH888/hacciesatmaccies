@@ -17,6 +17,7 @@ import { Alerts } from "./pages/Alerts";
 import { Comparables } from "./pages/Comparables";
 import { MemoGenerator } from "./pages/MemoGenerator";
 import { DataHealth } from "./pages/DataHealth";
+import { Monitor } from "./pages/Monitor";
 import { Privacy } from "./pages/Privacy";
 import { Terms } from "./pages/Terms";
 
@@ -77,6 +78,7 @@ export default function App() {
             <Route path="/deals" element={<DealFlow />} />
             <Route path="/watchlist" element={<Watchlist />} />
             <Route path="/alerts" element={<Alerts />} />
+            <Route path="/monitor" element={<Monitor />} />
             <Route path="/comparables" element={<Comparables />} />
             <Route path="/memo" element={<MemoGenerator />} />
             <Route path="/data" element={<DataHealth />} />
