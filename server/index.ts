@@ -32,7 +32,7 @@ import path from "node:path";
 
 import { REGIONS } from "../src/lib/geo";
 import { depositStageLabel, enrichAll, enrichTenement, mapDepositCommodity, type Deposit, type RawTenement } from "../src/lib/enrich";
-import type { Alert, Tenement } from "../src/lib/types";
+import type { Alert, AlertSeverity, AlertType, Tenement } from "../src/lib/types";
 import { aiEnabled, aiProvider, clearOpinionCache, generateMemo, generateOpinion, interpretQuery } from "./ai";
 import { checkAccess, hasSession, sessionToken } from "./auth";
 
@@ -70,8 +70,6 @@ interface Cache {
   lastError: string | null;
 }
 const cache: Cache = { data: null, fetchedAt: 0, refreshing: false, lastError: null };
-// previous snapshot for change detection across refreshes
-let prevSnap = new Map<string, { status: string; holder: string }>();
 
 /* ---------- geometry helpers ---------- */
 function simplifyRing(ring: number[][], max = 26): [number, number][] {
@@ -554,6 +552,100 @@ async function runAllWatches(): Promise<void> {
   if (watches.length) saveWatches();
 }
 
+/* ============================================================
+   Register-wide change detection — a lightweight snapshot of ALL
+   ~30k live/pending tenements (id, status, holder, expiry), diffed
+   between runs to surface new / status-change / holder-change /
+   newly-expired / dropped-off events across the WHOLE register,
+   not just the loaded sample. Persisted so it survives restarts.
+   ============================================================ */
+const REGWATCH_FILE = path.resolve(process.cwd(), "data", "register-watch.json");
+type SnapRow = { s: string; h: string; e: number | null };
+let regSnapshot = new Map<string, SnapRow>();
+let registerAlerts: Alert[] = [];
+let lastSnapshotAt: string | null = null;
+
+function loadRegWatch(): void {
+  try {
+    if (!fs.existsSync(REGWATCH_FILE)) return;
+    const j = JSON.parse(fs.readFileSync(REGWATCH_FILE, "utf8"));
+    if (Array.isArray(j.snapshot)) regSnapshot = new Map(j.snapshot);
+    if (Array.isArray(j.alerts)) registerAlerts = j.alerts;
+    lastSnapshotAt = j.savedAt ?? null;
+  } catch { /* ignore */ }
+}
+function saveRegWatch(): void {
+  try {
+    fs.mkdirSync(path.dirname(REGWATCH_FILE), { recursive: true });
+    fs.writeFileSync(REGWATCH_FILE, JSON.stringify({ snapshot: [...regSnapshot.entries()], alerts: registerAlerts.slice(0, 120), savedAt: lastSnapshotAt }));
+  } catch { /* ignore */ }
+}
+function mergeAlerts(reg: Alert[], base: Alert[]): Alert[] {
+  const seen = new Set<string>();
+  const out: Alert[] = [];
+  for (const a of [...reg, ...base]) if (a && !seen.has(a.id)) { seen.add(a.id); out.push(a); }
+  return out.slice(0, 80);
+}
+
+async function fetchRegisterSnapshot(): Promise<Map<string, SnapRow>> {
+  const out = new Map<string, SnapRow>();
+  const PAGE = 2000;
+  for (let offset = 0; offset < 60000; offset += PAGE) {
+    const params = new URLSearchParams({
+      where: BASE_WHERE, outFields: "fmt_tenid,tenstatus,holder1,enddate", orderByFields: "gid ASC",
+      resultOffset: String(offset), resultRecordCount: String(PAGE), returnGeometry: "false", f: "json",
+    });
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 25000);
+    let feats: any[] = [];
+    try {
+      const res = await fetch(`${SLIP}?${params.toString()}`, { signal: ctrl.signal, headers: { "User-Agent": "Haxax/1.0" } });
+      if (!res.ok) break;
+      feats = (await res.json()).features ?? [];
+    } catch { break; } finally { clearTimeout(to); }
+    const before = out.size;
+    for (const f of feats) {
+      const a = f.attributes ?? {};
+      const id = String(a.fmt_tenid ?? "").replace(/\s+/g, " ").trim();
+      if (id) out.set(id, { s: String(a.tenstatus ?? ""), h: String(a.holder1 ?? ""), e: typeof a.enddate === "number" ? a.enddate : null });
+    }
+    if (feats.length < PAGE || out.size === before) break; // last page, or pagination made no progress
+  }
+  return out;
+}
+
+async function snapshotAndDiff(): Promise<void> {
+  const curr = await fetchRegisterSnapshot();
+  if (curr.size < 1000) return; // guard: a partial/failed fetch must not wipe the baseline
+  const now = Date.now();
+  if (regSnapshot.size > 0) {
+    const fresh: Alert[] = [];
+    let n = 0;
+    const push = (type: AlertType, sev: AlertSeverity, id: string, title: string, message: string) =>
+      fresh.push({ id: `RW${now}-${n++}`, type, severity: sev, tenementId: id, title, message, timestamp: new Date(now).toISOString(), read: false });
+    for (const [id, c] of curr) {
+      const p = regSnapshot.get(id);
+      if (!p) { push("competitor", "medium", id, `New on register — ${id}`, `${id} (${titleCaseLite(c.h || "holder withheld")}) appeared on the WA register.`); continue; }
+      if (p.s !== c.s) push("title", "medium", id, `Status change — ${id}`, `${id} moved ${p.s} → ${c.s} on the register.`);
+      if (p.h && c.h && p.h !== c.h) push("title", "high", id, `Holder change — ${id}`, `${id}: ${titleCaseLite(p.h)} → ${titleCaseLite(c.h)}. Verify chain of title.`);
+      if (p.e && c.e && p.e >= now && c.e < now) push("expiry", "high", id, `Expired — ${id}`, `${id} passed its expiry date — renewal / forfeiture window.`);
+    }
+    for (const [id, p] of regSnapshot) {
+      if (!curr.has(id)) push("expiry", "high", id, `Left live register — ${id}`, `${id} (${titleCaseLite(p.h || "holder withheld")}) is no longer live/pending — possibly expired, surrendered or forfeited.`);
+    }
+    if (fresh.length) {
+      registerAlerts = [...fresh.slice(0, 60), ...registerAlerts].slice(0, 120);
+      if (cache.data) cache.data.alerts = mergeAlerts(registerAlerts, cache.data.alerts);
+      console.log(`[haxax] register-wide change detection: ${fresh.length} change(s) across ${curr.size} tenements`);
+    }
+  } else {
+    console.log(`[haxax] register-wide baseline established: ${curr.size} tenements`);
+  }
+  regSnapshot = curr;
+  lastSnapshotAt = new Date(now).toISOString();
+  saveRegWatch();
+}
+
 /* ---------- refresh the cache from SLIP ---------- */
 async function refresh(): Promise<void> {
   if (cache.refreshing) return;
@@ -578,21 +670,8 @@ async function refresh(): Promise<void> {
     }
     if (raws.length === 0) throw new Error("no records returned from SLIP");
     const enriched = enrichAll(raws, Date.now(), deposits, drillPoints);
-
-    // change detection vs previous refresh → genuine register-change alerts
-    if (prevSnap.size) {
-      const changes: Alert[] = [];
-      let n = 0;
-      for (const t of enriched.tenements) {
-        const prev = prevSnap.get(t.id);
-        const base = { id: `CHG${Date.now()}-${n++}`, tenementId: t.id, timestamp: new Date().toISOString(), read: false };
-        if (!prev) changes.push({ ...base, type: "competitor", severity: "medium", title: `New on register — ${t.id}`, message: `${t.id} (${t.holder}) appeared on the live register since the last sync.` });
-        else if (prev.status !== t.status) changes.push({ ...base, type: "title", severity: "medium", title: `Status change — ${t.id}`, message: `${t.id} moved ${prev.status} → ${t.status} on the register.` });
-        else if (prev.holder !== t.holder) changes.push({ ...base, type: "title", severity: "high", title: `Holder change — ${t.id}`, message: `${t.id} holder changed: ${prev.holder} → ${t.holder}. Verify chain of title.` });
-      }
-      if (changes.length) enriched.alerts = [...changes.slice(0, 20), ...enriched.alerts].slice(0, 60);
-    }
-    prevSnap = new Map(enriched.tenements.map((t) => [t.id, { status: t.status, holder: t.holder }]));
+    // merge in register-wide change alerts (all ~30k, detected by snapshotAndDiff)
+    enriched.alerts = mergeAlerts(registerAlerts, enriched.alerts);
     clearOpinionCache(); // AI notes regenerate against the fresh register
 
     cache.data = { ...enriched, source: "DMIRS / SLIP — Mining Tenements (DMIRS-003)", live: true, generatedAt: new Date().toISOString(), regions: ok, drillPoints, registerTotal, sourceExtract };
@@ -686,6 +765,7 @@ const server = http.createServer(async (req, res) => {
       ok: !!cache.data, live: cache.data?.live ?? false, source: cache.data?.source ?? null,
       tenements: cache.data?.tenements.length ?? 0, registerTotal: cache.data?.registerTotal ?? 0, regions: cache.data?.regions ?? 0,
       sourceExtract: cache.data?.sourceExtract ?? null,
+      registerWatched: regSnapshot.size, registerWatchedAt: lastSnapshotAt,
       fetchedAt: cache.fetchedAt ? new Date(cache.fetchedAt).toISOString() : null,
       ageMinutes: cache.fetchedAt ? Math.round((Date.now() - cache.fetchedAt) / 60000) : null,
       lastError: cache.lastError,
@@ -748,7 +828,7 @@ const server = http.createServer(async (req, res) => {
   if (url.pathname === "/api/data") {
     if (!cache.data && !cache.refreshing) await refresh();
     if (!cache.data) { send(res, 503, { error: cache.lastError ?? "data unavailable", live: false }); return; }
-    send(res, 200, cache.data);
+    send(res, 200, { ...cache.data, registerWatched: regSnapshot.size, registerWatchedAt: lastSnapshotAt });
     return;
   }
 
@@ -912,7 +992,11 @@ server.listen(PORT, () => {
   console.log(`[haxax] access: locked — single access code${IS_PROD ? "" : "  (dev: cookies non-Secure)"}`);
   if (fs.existsSync(DIST)) console.log(`[haxax] serving built app from ./dist`);
   loadWatches();
-  console.log(`[haxax] ${watches.length} register-wide watch(es) loaded`);
+  loadRegWatch();
+  console.log(`[haxax] ${watches.length} watch(es) loaded · register-wide change detection ${regSnapshot.size ? `(baseline ${regSnapshot.size})` : "(cold)"}`);
   refresh();
   setInterval(refresh, REFRESH_MS);
+  // register-wide change detection: baseline shortly after boot, then every 6h (source updates every few days)
+  setTimeout(() => { snapshotAndDiff().catch(() => {}); }, 45000);
+  setInterval(() => { snapshotAndDiff().catch(() => {}); }, 6 * 60 * 60 * 1000);
 });

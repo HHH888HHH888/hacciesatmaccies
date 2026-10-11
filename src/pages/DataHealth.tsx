@@ -20,6 +20,7 @@ export function DataHealth() {
   const generatedAt = useStore((s) => s.dataGeneratedAt);
   const regions = useStore((s) => s.dataRegions);
   const registerTotal = useStore((s) => s.dataRegisterTotal);
+  const registerWatched = useStore((s) => s.dataRegisterWatched);
   const sourceExtract = useStore((s) => s.dataSourceExtract);
   const extractDate = sourceExtract ? new Date(sourceExtract).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : null;
   const [syncing, setSyncing] = useState(false);
@@ -85,6 +86,12 @@ export function DataHealth() {
               lists; <strong>any</strong> tenement is reachable live by ID from the search bar. Statutory and geological
               context (geology, mineral field, LGA, native title, WAMEX) is queried live from government services per
               tenement, when you open it.
+            </p>
+            <p className="prose" style={{ marginBottom: "var(--sp-2)" }}>
+              <strong>Register-wide monitoring:</strong> change detection tracks all{" "}
+              <strong>{registerWatched ? fmtNum(registerWatched) : fmtNum(registerTotal)}</strong> live/pending tenements
+              across the whole register — new grants, status and holder changes, expiries and drop-offs — not just the
+              loaded sample. Your saved Watches also query the full register.
             </p>
             <p className="prose" style={{ fontSize: "var(--fs-12)", marginBottom: "var(--sp-2)" }}>
               <strong>DMIRS feed as at {extractDate ?? "—"}.</strong> The register publishes a periodic extract (every few

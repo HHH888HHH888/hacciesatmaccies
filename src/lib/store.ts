@@ -36,6 +36,8 @@ export interface DataPayload {
   regions?: number;
   registerTotal?: number;
   sourceExtract?: string | null;
+  registerWatched?: number;
+  registerWatchedAt?: string | null;
 }
 
 export type Theme = "dark" | "light";
@@ -91,6 +93,7 @@ interface Store {
   dataRegions: number;
   dataRegisterTotal: number;
   dataSourceExtract: string | null;
+  dataRegisterWatched: number;
   setData: (p: DataPayload, status: "live" | "mock") => void;
   setDataStatus: (s: DataStatus) => void;
   addTenement: (t: Tenement) => void;
@@ -180,6 +183,7 @@ export const useStore = create<Store>()(
       dataRegions: 0,
       dataRegisterTotal: 0,
       dataSourceExtract: null,
+      dataRegisterWatched: 0,
       setDataStatus: (s) => set({ dataStatus: s }),
       addTenement: (t) =>
         set((s) => (s.tenements.some((x) => x.id === t.id) ? {} : { tenements: [t, ...s.tenements] })),
@@ -194,7 +198,7 @@ export const useStore = create<Store>()(
             tenements: p.tenements, deposits: p.deposits ?? [], drillPoints: p.drillPoints ?? [], alerts: p.alerts, feed: p.feed, stats: p.stats,
             watchlist, deals, dataStatus: status,
             dataSource: p.source ?? (status === "live" ? "Live WA register" : "Offline cache"),
-            dataGeneratedAt: p.generatedAt ?? null, dataRegions: p.regions ?? 0, dataRegisterTotal: p.registerTotal ?? 0, dataSourceExtract: p.sourceExtract ?? null,
+            dataGeneratedAt: p.generatedAt ?? null, dataRegions: p.regions ?? 0, dataRegisterTotal: p.registerTotal ?? 0, dataSourceExtract: p.sourceExtract ?? null, dataRegisterWatched: p.registerWatched ?? 0,
             lastSync: Date.now(),
           };
         }),
