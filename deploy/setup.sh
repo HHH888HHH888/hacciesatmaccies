@@ -71,17 +71,13 @@ fi
 # ---- 4) .env (prompts for secrets on first run; kept out of git) ----
 if [ ! -f "${REPO_DIR}/.env" ]; then
   echo "==> creating .env (press Enter to accept the default in brackets)"
-  read -rsp "  Site gate password [haxax888]: " GATE;  echo; GATE=${GATE:-haxax888}
-  read -rsp "  Admin password     [haig888]:  " ADMIN; echo; ADMIN=${ADMIN:-haig888}
-  read -rsp "  Guest password     [haxax888]: " GUEST; echo; GUEST=${GUEST:-haxax888}
+  read -rsp "  Access code [haxax888]: " ACCESS; echo; ACCESS=${ACCESS:-haxax888}
   read -rsp "  MiniMax API key (blank = skip AI notes): " MMKEY; echo
   SECRET="$(node -e "console.log(require('crypto').randomBytes(24).toString('hex'))")"
   {
     echo "HAXAX_API_PORT=8787"
     echo "NODE_ENV=production"
-    echo "HAXAX_GATE_PASSWORD=${GATE}"
-    echo "HAXAX_ADMIN_PASSWORD=${ADMIN}"
-    echo "HAXAX_GUEST_PASSWORD=${GUEST}"
+    echo "HAXAX_ACCESS_PASSWORD=${ACCESS}"
     echo "HAXAX_SESSION_SECRET=${SECRET}"
     echo "MINIMAX_MODEL=MiniMax-M2"
     echo "MINIMAX_URL=https://api.minimax.io/v1/text/chatcompletion_v2"
